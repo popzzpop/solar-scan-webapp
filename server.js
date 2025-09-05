@@ -84,6 +84,42 @@ app.get('/api/solar/data-layers/:lat/:lng', async (req, res) => {
   }
 });
 
+app.get('/api/solar/image-proxy', async (req, res) => {
+  const { url, type } = req.query;
+  
+  if (!url) {
+    return res.status(400).json({ error: 'URL parameter required' });
+  }
+
+  try {
+    console.log(`Fetching ${type} image from:`, url);
+    
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image: ${response.status}`);
+    }
+
+    // Get the content type from the response
+    const contentType = response.headers.get('content-type');
+    console.log(`${type} image content type:`, contentType);
+
+    // Pass through the image data
+    const imageBuffer = await response.buffer();
+    
+    // Set appropriate headers
+    res.set('Content-Type', contentType || 'image/png');
+    res.set('Content-Length', imageBuffer.length);
+    res.set('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
+    
+    res.send(imageBuffer);
+    
+  } catch (error) {
+    console.error(`Error proxying ${type} image:`, error);
+    res.status(500).json({ error: `Failed to fetch ${type} image` });
+  }
+});
+
 app.get('*', (req, res) => {
   // Only serve index.html for routes that don't have file extensions
   // This prevents static files (.js, .css, .png, etc.) from being served as HTML

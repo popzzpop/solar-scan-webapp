@@ -105,6 +105,11 @@ async function analyzeSolarPotential(lat, lng) {
         
         const dataLayersResponse = await fetchDataLayers(lat, lng);
         
+        // Store data layers for roof visualization
+        if (dataLayersResponse && !dataLayersResponse.error) {
+            currentSolarData.dataLayers = dataLayersResponse;
+        }
+        
         loadingIndicator.classList.add('hidden');
         resultsPanel.classList.remove('hidden');
         savingsPanel.classList.remove('hidden');
@@ -137,7 +142,7 @@ async function fetchBuildingInsights(lat, lng) {
 
 async function fetchDataLayers(lat, lng) {
     try {
-        const response = await fetch(`/api/solar/data-layers/${lat}/${lng}?radius=100&view=FULL_LAYERS`);
+        const response = await fetch(`/api/solar/data-layers/${lat}/${lng}?radius=100&view=IMAGERY_AND_ANNUAL_FLUX_LAYERS`);
         return await response.json();
     } catch (error) {
         console.error('Data layers error:', error);
@@ -260,11 +265,16 @@ let currentSolarData = null;
 let roofCanvas = null;
 let roofContext = null;
 let maxPanels = 0;
+let satelliteImage = null;
+let maskImage = null;
+let fluxImage = null;
+let showFluxOverlay = false;
 
 // Enhanced setup to include panel configuration
 function setupPanelConfiguration() {
     const slider = document.getElementById('panelCountSlider');
     const canvas = document.getElementById('roofCanvas');
+    const fluxToggle = document.getElementById('fluxOverlayToggle');
     
     if (canvas) {
         roofCanvas = canvas;
@@ -274,6 +284,10 @@ function setupPanelConfiguration() {
     if (slider) {
         slider.addEventListener('input', handlePanelCountChange);
         slider.addEventListener('change', handlePanelCountChange);
+    }
+    
+    if (fluxToggle) {
+        fluxToggle.addEventListener('change', handleFluxToggle);
     }
 }
 
@@ -290,6 +304,26 @@ function handlePanelCountChange(event) {
     updatePanelDisplay(selectedPanels);
     updateLiveCalculations(selectedPanels);
     updateRoofVisualization(selectedPanels);
+}
+
+// Handle flux overlay toggle
+function handleFluxToggle(event) {
+    showFluxOverlay = event.target.checked;
+    console.log('Flux overlay toggled:', showFluxOverlay);
+    
+    // Redraw the roof with or without flux overlay
+    const slider = document.getElementById('panelCountSlider');
+    if (slider) {
+        const selectedPanels = parseInt(slider.value);
+        updateRoofVisualization(selectedPanels);
+    } else {
+        // Just redraw the roof background
+        if (satelliteImage) {
+            drawSatelliteRoof();
+        } else {
+            drawBasicRoof();
+        }
+    }
 }
 
 // Update panel count display
@@ -376,14 +410,149 @@ function showPanelPanels() {
 }
 
 // Initialize roof canvas visualization
-function initializeRoofVisualization() {
+async function initializeRoofVisualization() {
     if (!roofContext || !currentSolarData) return;
     
     // Clear canvas
     roofContext.clearRect(0, 0, roofCanvas.width, roofCanvas.height);
     
-    // Draw basic roof outline
-    drawBasicRoof();
+    // Load satellite imagery if available
+    if (currentSolarData.dataLayers && currentSolarData.dataLayers.rgbUrl) {
+        await loadSatelliteImagery();
+    } else {
+        // Fallback to basic roof outline
+        drawBasicRoof();
+    }
+}
+
+// Load satellite imagery from Google Solar API
+async function loadSatelliteImagery() {
+    const dataLayers = currentSolarData.dataLayers;
+    
+    try {
+        console.log('Loading satellite imagery with data layers:', dataLayers);
+        
+        // Load RGB satellite image via our server proxy
+        if (dataLayers.rgbUrl) {
+            console.log('Loading RGB image from:', dataLayers.rgbUrl);
+            satelliteImage = await loadImageViaProxy(dataLayers.rgbUrl, 'rgb');
+        }
+        
+        // Load mask (roof boundaries)
+        if (dataLayers.maskUrl) {
+            console.log('Loading mask image from:', dataLayers.maskUrl);
+            maskImage = await loadImageViaProxy(dataLayers.maskUrl, 'mask');
+        }
+        
+        // Load flux data (solar heat map)
+        if (dataLayers.annualFluxUrl) {
+            console.log('Loading flux image from:', dataLayers.annualFluxUrl);
+            fluxImage = await loadImageViaProxy(dataLayers.annualFluxUrl, 'flux');
+        }
+        
+        // Draw the satellite view
+        drawSatelliteRoof();
+        
+    } catch (error) {
+        console.error('Error loading satellite imagery:', error);
+        // Fallback to basic roof
+        drawBasicRoof();
+    }
+}
+
+// Helper function to load image via server proxy
+async function loadImageViaProxy(geoTiffUrl, type) {
+    try {
+        // Request the server to fetch and convert the GeoTIFF to an image
+        const response = await fetch(`/api/solar/image-proxy?url=${encodeURIComponent(geoTiffUrl)}&type=${type}`);
+        
+        if (!response.ok) {
+            throw new Error(`Failed to load image: ${response.statusText}`);
+        }
+        
+        const blob = await response.blob();
+        const imageUrl = URL.createObjectURL(blob);
+        
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => {
+                URL.revokeObjectURL(imageUrl); // Clean up
+                resolve(img);
+            };
+            img.onerror = () => {
+                URL.revokeObjectURL(imageUrl); // Clean up
+                reject(new Error(`Failed to load image: ${type}`));
+            };
+            img.src = imageUrl;
+        });
+        
+    } catch (error) {
+        console.error(`Error loading ${type} image via proxy:`, error);
+        throw error;
+    }
+}
+
+// Helper function to load image from URL (fallback)
+function loadImage(url) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = url;
+    });
+}
+
+// Draw satellite roof with imagery
+function drawSatelliteRoof() {
+    if (!roofContext) return;
+    
+    const width = roofCanvas.width;
+    const height = roofCanvas.height;
+    
+    // Clear canvas
+    roofContext.clearRect(0, 0, width, height);
+    
+    // Draw satellite image as background if available
+    if (satelliteImage) {
+        console.log('Drawing satellite image...');
+        roofContext.drawImage(satelliteImage, 0, 0, width, height);
+        
+        // Apply mask overlay to highlight roof
+        if (maskImage) {
+            console.log('Applying roof mask...');
+            roofContext.globalCompositeOperation = 'source-atop';
+            roofContext.drawImage(maskImage, 0, 0, width, height);
+            roofContext.globalCompositeOperation = 'source-over';
+        }
+        
+        // Optional: Show solar flux heat map
+        if (showFluxOverlay && fluxImage) {
+            console.log('Adding flux overlay...');
+            roofContext.globalAlpha = 0.7;
+            roofContext.globalCompositeOperation = 'multiply';
+            roofContext.drawImage(fluxImage, 0, 0, width, height);
+            roofContext.globalCompositeOperation = 'source-over';
+            roofContext.globalAlpha = 1.0;
+        }
+    } else {
+        console.log('No satellite image available, showing placeholder...');
+        // Show a message if no satellite imagery is available
+        roofContext.fillStyle = '#f8fafc';
+        roofContext.fillRect(0, 0, width, height);
+        
+        roofContext.fillStyle = '#64748b';
+        roofContext.font = '16px sans-serif';
+        roofContext.textAlign = 'center';
+        roofContext.fillText('Loading satellite imagery...', width/2, height/2 - 10);
+        roofContext.font = '12px sans-serif';
+        roofContext.fillText('(Satellite data may not be available for all locations)', width/2, height/2 + 15);
+    }
+    
+    // Add a border
+    roofContext.strokeStyle = '#e2e8f0';
+    roofContext.lineWidth = 2;
+    roofContext.strokeRect(0, 0, width, height);
 }
 
 // Draw basic roof representation
@@ -423,14 +592,18 @@ function drawBasicRoof() {
 }
 
 // Update roof visualization with selected panels
-function updateRoofVisualization(selectedPanels) {
+async function updateRoofVisualization(selectedPanels) {
     if (!roofContext || maxPanels === 0) return;
     
-    // Redraw basic roof
-    drawBasicRoof();
+    // Redraw roof background (satellite or basic)
+    if (satelliteImage) {
+        drawSatelliteRoof();
+    } else {
+        drawBasicRoof();
+    }
     
     if (selectedPanels > 0) {
-        drawSolarPanels(selectedPanels);
+        drawSolarPanelsOnRealRoof(selectedPanels);
     }
 }
 
@@ -511,4 +684,168 @@ function drawSolarPanels(panelCount) {
         width / 2, 
         height - 10
     );
+}
+
+// Draw solar panels using actual roof segment data
+function drawSolarPanelsOnRealRoof(selectedPanels) {
+    if (!roofContext || !currentSolarData.solarPotential) return;
+    
+    const solarPotential = currentSolarData.solarPotential;
+    
+    // Use actual panel configurations if available
+    if (solarPotential.solarPanelConfigs && solarPotential.solarPanelConfigs.length > 0) {
+        drawPanelsFromConfigs(selectedPanels, solarPotential.solarPanelConfigs);
+    } else {
+        // Fallback to basic grid placement
+        drawSolarPanels(selectedPanels);
+    }
+}
+
+// Draw panels using Google Solar API panel configurations
+function drawPanelsFromConfigs(selectedPanels, panelConfigs) {
+    if (!roofContext) return;
+    
+    const width = roofCanvas.width;
+    const height = roofCanvas.height;
+    
+    let totalPanelsToPlace = selectedPanels;
+    let panelsPlaced = 0;
+    
+    // Sort configurations by panel count (largest first for better placement)
+    const sortedConfigs = [...panelConfigs].sort((a, b) => b.panelsCount - a.panelsCount);
+    
+    for (const config of sortedConfigs) {
+        if (panelsPlaced >= selectedPanels) break;
+        
+        const panelsInThisConfig = Math.min(config.panelsCount, totalPanelsToPlace - panelsPlaced);
+        
+        if (panelsInThisConfig > 0) {
+            // Draw panels for this configuration
+            drawPanelsForConfig(config, panelsInThisConfig);
+            panelsPlaced += panelsInThisConfig;
+        }
+    }
+    
+    // Add panel count text overlay
+    roofContext.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    roofContext.fillRect(10, height - 40, 120, 30);
+    roofContext.fillStyle = '#1f2937';
+    roofContext.font = 'bold 14px sans-serif';
+    roofContext.textAlign = 'left';
+    roofContext.fillText(`${selectedPanels} Solar Panels`, 15, height - 20);
+}
+
+// Draw panels for a specific configuration
+function drawPanelsForConfig(config, panelCount) {
+    if (!roofContext || !config.roofSegmentSummaries) return;
+    
+    const width = roofCanvas.width;
+    const height = roofCanvas.height;
+    
+    // Distribute panels across roof segments in this configuration
+    let panelsRemaining = panelCount;
+    
+    for (const segment of config.roofSegmentSummaries) {
+        if (panelsRemaining <= 0) break;
+        
+        const segmentPanels = Math.min(segment.panelsCount, panelsRemaining);
+        
+        if (segmentPanels > 0) {
+            drawPanelsForSegment(segment, segmentPanels, width, height);
+            panelsRemaining -= segmentPanels;
+        }
+    }
+}
+
+// Draw panels for a specific roof segment
+function drawPanelsForSegment(segment, panelCount, canvasWidth, canvasHeight) {
+    if (!roofContext) return;
+    
+    // Calculate panel positions based on roof segment
+    // This is a simplified approach - in reality we'd use the exact geometry
+    const segmentIndex = segment.segmentIndex || 0;
+    
+    // Map segment to canvas area (simplified)
+    const cols = Math.ceil(Math.sqrt(panelCount));
+    const rows = Math.ceil(panelCount / cols);
+    
+    // Create segment-specific area
+    const segmentArea = {
+        x: (segmentIndex % 3) * (canvasWidth / 3) + 20,
+        y: Math.floor(segmentIndex / 3) * (canvasHeight / 3) + 20,
+        width: canvasWidth / 3 - 40,
+        height: canvasHeight / 3 - 40
+    };
+    
+    const panelWidth = segmentArea.width / cols - 4;
+    const panelHeight = segmentArea.height / rows - 4;
+    
+    // Set panel color based on efficiency (azimuth/pitch affect efficiency)
+    const efficiency = calculatePanelEfficiency(segment.azimuthDegrees, segment.pitchDegrees);
+    roofContext.fillStyle = getPanelColor(efficiency);
+    roofContext.strokeStyle = '#1e40af';
+    roofContext.lineWidth = 1;
+    
+    let panelsDrawn = 0;
+    
+    for (let row = 0; row < rows && panelsDrawn < panelCount; row++) {
+        for (let col = 0; col < cols && panelsDrawn < panelCount; col++) {
+            const x = segmentArea.x + col * (panelWidth + 4);
+            const y = segmentArea.y + row * (panelHeight + 4);
+            
+            // Draw panel
+            roofContext.fillRect(x, y, panelWidth, panelHeight);
+            roofContext.strokeRect(x, y, panelWidth, panelHeight);
+            
+            // Add solar cell grid pattern
+            roofContext.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            roofContext.lineWidth = 0.5;
+            
+            // Draw grid lines
+            const gridLines = 4;
+            for (let i = 1; i < gridLines; i++) {
+                // Vertical lines
+                const lineX = x + (i * panelWidth) / gridLines;
+                roofContext.beginPath();
+                roofContext.moveTo(lineX, y);
+                roofContext.lineTo(lineX, y + panelHeight);
+                roofContext.stroke();
+                
+                // Horizontal lines
+                const lineY = y + (i * panelHeight) / gridLines;
+                roofContext.beginPath();
+                roofContext.moveTo(x, lineY);
+                roofContext.lineTo(x + panelWidth, lineY);
+                roofContext.stroke();
+            }
+            
+            roofContext.strokeStyle = '#1e40af';
+            roofContext.lineWidth = 1;
+            panelsDrawn++;
+        }
+    }
+}
+
+// Calculate panel efficiency based on roof orientation
+function calculatePanelEfficiency(azimuth, pitch) {
+    // Optimal: South-facing (180°), 30° pitch
+    const optimalAzimuth = 180;
+    const optimalPitch = 30;
+    
+    const azimuthDiff = Math.abs(azimuth - optimalAzimuth);
+    const pitchDiff = Math.abs(pitch - optimalPitch);
+    
+    // Simple efficiency calculation (0.6 to 1.0)
+    const azimuthEfficiency = Math.max(0.6, 1 - (azimuthDiff / 180) * 0.4);
+    const pitchEfficiency = Math.max(0.6, 1 - (pitchDiff / 60) * 0.4);
+    
+    return (azimuthEfficiency + pitchEfficiency) / 2;
+}
+
+// Get panel color based on efficiency
+function getPanelColor(efficiency) {
+    if (efficiency > 0.9) return '#10b981'; // High efficiency - green
+    if (efficiency > 0.8) return '#3b82f6'; // Good efficiency - blue
+    if (efficiency > 0.7) return '#f59e0b'; // Medium efficiency - orange
+    return '#ef4444'; // Lower efficiency - red
 }
