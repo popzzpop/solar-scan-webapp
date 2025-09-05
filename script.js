@@ -254,3 +254,261 @@ function createSavingsChart(solarData) {
         }
     });
 }
+
+// Global variables for panel configuration
+let currentSolarData = null;
+let roofCanvas = null;
+let roofContext = null;
+let maxPanels = 0;
+
+// Enhanced setup to include panel configuration
+function setupPanelConfiguration() {
+    const slider = document.getElementById('panelCountSlider');
+    const canvas = document.getElementById('roofCanvas');
+    
+    if (canvas) {
+        roofCanvas = canvas;
+        roofContext = canvas.getContext('2d');
+    }
+    
+    if (slider) {
+        slider.addEventListener('input', handlePanelCountChange);
+        slider.addEventListener('change', handlePanelCountChange);
+    }
+}
+
+// Add to existing setupEventListeners function
+const originalSetupEventListeners = setupEventListeners;
+setupEventListeners = function() {
+    originalSetupEventListeners();
+    setupPanelConfiguration();
+};
+
+// Handle slider changes
+function handlePanelCountChange(event) {
+    const selectedPanels = parseInt(event.target.value);
+    updatePanelDisplay(selectedPanels);
+    updateLiveCalculations(selectedPanels);
+    updateRoofVisualization(selectedPanels);
+}
+
+// Update panel count display
+function updatePanelDisplay(selectedPanels) {
+    const selectedCountEl = document.getElementById('selectedPanelCount');
+    const sliderEl = document.getElementById('panelCountSlider');
+    
+    if (selectedCountEl) {
+        selectedCountEl.textContent = selectedPanels;
+    }
+    
+    // Update slider visual progress
+    if (sliderEl && maxPanels > 0) {
+        const percentage = (selectedPanels / maxPanels) * 100;
+        sliderEl.style.background = `linear-gradient(to right, #3B82F6 0%, #3B82F6 ${percentage}%, #E5E7EB ${percentage}%, #E5E7EB 100%)`;
+    }
+}
+
+// Update live calculations based on selected panels
+function updateLiveCalculations(selectedPanels) {
+    if (!currentSolarData) return;
+    
+    const maxGeneration = (currentSolarData.maxArrayAreaMeters2 || 0) * 150; // kWh per year per m²
+    const panelGeneration = selectedPanels > 0 ? (maxGeneration * selectedPanels) / maxPanels : 0;
+    const yearlySavings = panelGeneration * 0.12; // $0.12 per kWh
+    const co2Offset = panelGeneration * 0.4; // 0.4 kg CO2 per kWh
+    const coverage = maxPanels > 0 ? (selectedPanels / maxPanels) * 100 : 0;
+    
+    // Update display elements
+    document.getElementById('liveGeneration').textContent = Math.round(panelGeneration).toLocaleString() + ' kWh';
+    document.getElementById('liveSavings').textContent = '$' + Math.round(yearlySavings).toLocaleString();
+    document.getElementById('liveCO2').textContent = Math.round(co2Offset).toLocaleString() + ' kg';
+    document.getElementById('liveCoverage').textContent = Math.round(coverage) + '%';
+}
+
+// Enhanced displayResults function to show panel configuration
+const originalDisplayResults = displayResults;
+displayResults = function(data) {
+    originalDisplayResults(data);
+    
+    // Store current data for panel calculations
+    currentSolarData = data;
+    
+    if (data.solarPotential) {
+        setupPanelSelector(data.solarPotential);
+        showPanelPanels();
+    }
+};
+
+// Setup panel selector with API data
+function setupPanelSelector(solarPotential) {
+    maxPanels = solarPotential.maxArrayPanelsCount || 0;
+    
+    const slider = document.getElementById('panelCountSlider');
+    const maxCountEl = document.getElementById('maxPanelCount');
+    const maxLabelEl = document.getElementById('maxPanelCountLabel');
+    
+    if (slider && maxPanels > 0) {
+        slider.max = maxPanels;
+        slider.value = Math.round(maxPanels * 0.8); // Default to 80% of max
+        
+        if (maxCountEl) maxCountEl.textContent = maxPanels;
+        if (maxLabelEl) maxLabelEl.textContent = maxPanels;
+        
+        // Trigger initial update
+        handlePanelCountChange({ target: slider });
+    }
+}
+
+// Show panel configuration panels
+function showPanelPanels() {
+    const panelConfigPanel = document.getElementById('panelConfigPanel');
+    const roofVisualizationPanel = document.getElementById('roofVisualizationPanel');
+    
+    if (panelConfigPanel) {
+        panelConfigPanel.classList.remove('hidden');
+    }
+    
+    if (roofVisualizationPanel) {
+        roofVisualizationPanel.classList.remove('hidden');
+        // Initialize roof visualization
+        initializeRoofVisualization();
+    }
+}
+
+// Initialize roof canvas visualization
+function initializeRoofVisualization() {
+    if (!roofContext || !currentSolarData) return;
+    
+    // Clear canvas
+    roofContext.clearRect(0, 0, roofCanvas.width, roofCanvas.height);
+    
+    // Draw basic roof outline
+    drawBasicRoof();
+}
+
+// Draw basic roof representation
+function drawBasicRoof() {
+    if (!roofContext) return;
+    
+    const width = roofCanvas.width;
+    const height = roofCanvas.height;
+    const padding = 40;
+    
+    // Clear canvas with light background
+    roofContext.fillStyle = '#f8fafc';
+    roofContext.fillRect(0, 0, width, height);
+    
+    // Draw roof outline (simple rectangle for now)
+    const roofWidth = width - padding * 2;
+    const roofHeight = height - padding * 2;
+    const roofX = padding;
+    const roofY = padding;
+    
+    // Roof background
+    roofContext.fillStyle = '#e2e8f0';
+    roofContext.fillRect(roofX, roofY, roofWidth, roofHeight);
+    
+    // Roof border
+    roofContext.strokeStyle = '#64748b';
+    roofContext.lineWidth = 2;
+    roofContext.strokeRect(roofX, roofY, roofWidth, roofHeight);
+    
+    // Add roof ridge line for depth
+    roofContext.strokeStyle = '#475569';
+    roofContext.lineWidth = 1;
+    roofContext.beginPath();
+    roofContext.moveTo(roofX + roofWidth * 0.5, roofY);
+    roofContext.lineTo(roofX + roofWidth * 0.5, roofY + roofHeight);
+    roofContext.stroke();
+}
+
+// Update roof visualization with selected panels
+function updateRoofVisualization(selectedPanels) {
+    if (!roofContext || maxPanels === 0) return;
+    
+    // Redraw basic roof
+    drawBasicRoof();
+    
+    if (selectedPanels > 0) {
+        drawSolarPanels(selectedPanels);
+    }
+}
+
+// Draw solar panels on the roof
+function drawSolarPanels(panelCount) {
+    if (!roofContext) return;
+    
+    const width = roofCanvas.width;
+    const height = roofCanvas.height;
+    const padding = 40;
+    const roofWidth = width - padding * 2;
+    const roofHeight = height - padding * 2;
+    const roofX = padding;
+    const roofY = padding;
+    
+    // Calculate panel dimensions and layout
+    const panelsPerRow = Math.ceil(Math.sqrt(maxPanels * (roofWidth / roofHeight)));
+    const rows = Math.ceil(maxPanels / panelsPerRow);
+    
+    const panelWidth = (roofWidth - 20) / panelsPerRow; // 20px for spacing
+    const panelHeight = (roofHeight - 20) / rows;
+    
+    const startX = roofX + 10;
+    const startY = roofY + 10;
+    
+    // Draw panels
+    roofContext.fillStyle = '#3b82f6';
+    roofContext.strokeStyle = '#1e40af';
+    roofContext.lineWidth = 1;
+    
+    let panelsDrawn = 0;
+    
+    for (let row = 0; row < rows && panelsDrawn < panelCount; row++) {
+        for (let col = 0; col < panelsPerRow && panelsDrawn < panelCount; col++) {
+            const x = startX + col * panelWidth;
+            const y = startY + row * panelHeight;
+            
+            // Panel rectangle
+            roofContext.fillRect(x, y, panelWidth - 2, panelHeight - 2);
+            roofContext.strokeRect(x, y, panelWidth - 2, panelHeight - 2);
+            
+            // Panel grid lines for detail
+            roofContext.strokeStyle = '#60a5fa';
+            roofContext.lineWidth = 0.5;
+            
+            // Vertical lines
+            const verticalLines = 3;
+            for (let i = 1; i < verticalLines; i++) {
+                const lineX = x + (i * (panelWidth - 2)) / verticalLines;
+                roofContext.beginPath();
+                roofContext.moveTo(lineX, y);
+                roofContext.lineTo(lineX, y + panelHeight - 2);
+                roofContext.stroke();
+            }
+            
+            // Horizontal lines
+            const horizontalLines = 4;
+            for (let i = 1; i < horizontalLines; i++) {
+                const lineY = y + (i * (panelHeight - 2)) / horizontalLines;
+                roofContext.beginPath();
+                roofContext.moveTo(x, lineY);
+                roofContext.lineTo(x + panelWidth - 2, lineY);
+                roofContext.stroke();
+            }
+            
+            roofContext.strokeStyle = '#1e40af';
+            roofContext.lineWidth = 1;
+            panelsDrawn++;
+        }
+    }
+    
+    // Add panel count text
+    roofContext.fillStyle = '#1f2937';
+    roofContext.font = '14px sans-serif';
+    roofContext.textAlign = 'center';
+    roofContext.fillText(
+        `${panelCount} Solar Panels`, 
+        width / 2, 
+        height - 10
+    );
+}
