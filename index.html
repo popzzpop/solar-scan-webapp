@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solar Scan - Google Solar API Demo</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-50">
+    <div id="app">
+        <header class="bg-blue-600 text-white p-6 shadow-lg">
+            <div class="container mx-auto">
+                <h1 class="text-3xl font-bold mb-2">☀️ Solar Scan</h1>
+                <p class="text-blue-100">Discover your solar potential with Google Solar API</p>
+            </div>
+        </header>
+
+        <main class="container mx-auto p-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="space-y-6">
+                    <div class="bg-white rounded-lg shadow-md p-6">
+                        <h2 class="text-xl font-semibold mb-4">🏠 Building Analysis</h2>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Enter Address or Click on Map</label>
+                                <input type="text" id="addressInput" placeholder="123 Main St, City, State" 
+                                       class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <button id="searchBtn" class="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition-colors">
+                                Analyze Solar Potential
+                            </button>
+                            <div id="loadingIndicator" class="hidden text-center py-4">
+                                <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                                <p class="mt-2 text-gray-600">Analyzing solar potential...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="resultsPanel" class="hidden bg-white rounded-lg shadow-md p-6">
+                        <h3 class="text-lg font-semibold mb-4">📊 Solar Analysis Results</h3>
+                        <div id="solarResults" class="space-y-4"></div>
+                    </div>
+
+                    <div id="savingsPanel" class="hidden bg-white rounded-lg shadow-md p-6">
+                        <h3 class="text-lg font-semibold mb-4">💰 Potential Savings</h3>
+                        <canvas id="savingsChart" width="400" height="200"></canvas>
+                    </div>
+                </div>
+
+                <div class="space-y-6">
+                    <div class="bg-white rounded-lg shadow-md p-6">
+                        <h2 class="text-xl font-semibold mb-4">🗺️ Interactive Map</h2>
+                        <div id="map" class="h-96 rounded-lg"></div>
+                        <p class="text-sm text-gray-600 mt-2">Click anywhere on the map to analyze solar potential</p>
+                    </div>
+
+                    <div id="apiInfo" class="bg-white rounded-lg shadow-md p-6">
+                        <h3 class="text-lg font-semibold mb-4">🔧 API Features Demonstrated</h3>
+                        <div class="space-y-2">
+                            <div class="flex items-center space-x-2">
+                                <span class="w-2 h-2 bg-green-500 rounded-full"></span>
+                                <span class="text-sm">Building Insights API - Roof dimensions & solar potential</span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span class="w-2 h-2 bg-blue-500 rounded-full"></span>
+                                <span class="text-sm">Data Layers API - Raw solar datasets</span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span class="w-2 h-2 bg-orange-500 rounded-full"></span>
+                                <span class="text-sm">Energy modeling & financial analysis</span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span class="w-2 h-2 bg-purple-500 rounded-full"></span>
+                                <span class="text-sm">Real-time visualization</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="bg-gray-800 text-white p-6 mt-12">
+            <div class="container mx-auto text-center">
+                <p>&copy; 2025 Solar Scan - Powered by Google Solar API</p>
+                <p class="text-gray-400 text-sm mt-2">Accelerating solar adoption with data-driven insights</p>
+            </div>
+        </footer>
+    </div>
+
+    <script type="module" src="script.js"></script>
+</body>
+</html>
