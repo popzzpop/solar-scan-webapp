@@ -1,10 +1,14 @@
+import RoofVisualizer from './roofVisualizer.js';
+
 let map;
 let currentMarker;
 let savingsChart;
+let roofVisualizer;
 
 document.addEventListener('DOMContentLoaded', function() {
     initializeMap();
     setupEventListeners();
+    initializeRoofVisualizer();
 });
 
 function initializeMap() {
@@ -29,6 +33,10 @@ function initializeMap() {
     });
 }
 
+function initializeRoofVisualizer() {
+    roofVisualizer = new RoofVisualizer('roofViewer');
+}
+
 function setupEventListeners() {
     const searchBtn = document.getElementById('searchBtn');
     const addressInput = document.getElementById('addressInput');
@@ -37,6 +45,37 @@ function setupEventListeners() {
     addressInput.addEventListener('keypress', function(e) {
         if (e.key === 'Enter') {
             handleAddressSearch();
+        }
+    });
+
+    // Roof visualizer controls
+    const panelSlider = document.getElementById('panelSlider');
+    const resetBtn = document.getElementById('resetPanels');
+    const maxPanelsBtn = document.getElementById('maxPanelsBtn');
+    const toggleViewBtn = document.getElementById('toggleView');
+
+    panelSlider.addEventListener('input', function(e) {
+        const count = parseInt(e.target.value);
+        if (roofVisualizer) {
+            roofVisualizer.updatePanelCount(count);
+        }
+    });
+
+    resetBtn.addEventListener('click', function() {
+        if (roofVisualizer) {
+            roofVisualizer.clearAllPanels();
+        }
+    });
+
+    maxPanelsBtn.addEventListener('click', function() {
+        if (roofVisualizer) {
+            roofVisualizer.setMaxPanels();
+        }
+    });
+
+    toggleViewBtn.addEventListener('click', function() {
+        if (roofVisualizer) {
+            roofVisualizer.toggle2DView();
         }
     });
 }
@@ -104,6 +143,12 @@ async function analyzeSolarPotential(lat, lng) {
         displayResults(buildingData);
         
         const dataLayersResponse = await fetchDataLayers(lat, lng);
+        
+        // Load roof visualizer with solar data
+        if (roofVisualizer && buildingData.solarPotential) {
+            await roofVisualizer.loadSolarData(lat, lng, buildingData);
+            roofVisualizer.show();
+        }
         
         loadingIndicator.classList.add('hidden');
         resultsPanel.classList.remove('hidden');
