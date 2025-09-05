@@ -85,7 +85,13 @@ app.get('/api/solar/data-layers/:lat/:lng', async (req, res) => {
 });
 
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+  // Only serve index.html for routes that don't have file extensions
+  // This prevents static files (.js, .css, .png, etc.) from being served as HTML
+  if (path.extname(req.path) === '') {
+    res.sendFile(path.join(__dirname, 'index.html'));
+  } else {
+    res.status(404).send('File not found');
+  }
 });
 
 app.listen(PORT, () => {
