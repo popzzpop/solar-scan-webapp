@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static('dist'));
+app.use(express.static(__dirname));
 
 app.get('/api/solar/building/:lat/:lng', async (req, res) => {
   const { lat, lng } = req.params;
@@ -85,7 +85,7 @@ app.get('/api/solar/data-layers/:lat/:lng', async (req, res) => {
 });
 
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+  res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 app.listen(PORT, () => {
