@@ -26,10 +26,18 @@ app.get('/api/solar/building/:lat/:lng', async (req, res) => {
 
   try {
     const response = await fetch(
-      `https://solar.googleapis.com/v1/buildingInsights:findClosest?location.latitude=${lat}&location.longitude=${lng}&key=${apiKey}`
+      `https://solar.googleapis.com/v1/buildingInsights:findClosest?location.latitude=${lat}&location.longitude=${lng}&requiredQuality=LOW&key=${apiKey}`
     );
 
     if (!response.ok) {
+      if (response.status === 404) {
+        const errorDetails = await response.text();
+        console.error('Solar API 404 - Location not covered:', errorDetails);
+        return res.status(404).json({ 
+          error: 'Solar data not available for this location',
+          details: 'This location may not be covered by Google Solar API or the building may not be recognized. Try a different address or coordinates in a major city.'
+        });
+      }
       throw new Error(`API request failed: ${response.status}`);
     }
 
@@ -54,10 +62,17 @@ app.get('/api/solar/data-layers/:lat/:lng', async (req, res) => {
 
   try {
     const response = await fetch(
-      `https://solar.googleapis.com/v1/dataLayers:get?location.latitude=${lat}&location.longitude=${lng}&radiusMeters=${radiusMeters}&view=${view}&key=${apiKey}`
+      `https://solar.googleapis.com/v1/dataLayers:get?location.latitude=${lat}&location.longitude=${lng}&radiusMeters=${radiusMeters}&view=${view}&requiredQuality=LOW&key=${apiKey}`
     );
 
     if (!response.ok) {
+      if (response.status === 404) {
+        console.error('Solar API 404 - Data layers not available for location');
+        return res.status(404).json({ 
+          error: 'Solar data layers not available for this location',
+          details: 'This location may not be covered by Google Solar API data layers.'
+        });
+      }
       throw new Error(`API request failed: ${response.status}`);
     }
 
