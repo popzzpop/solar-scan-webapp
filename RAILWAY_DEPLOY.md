@@ -10,8 +10,17 @@
 
 ## Quick Deploy Methods
 
-### 1. 🖱️ Manual Deploy (Recommended)
-The easiest way to deploy:
+### 1. 🚀 CLI Deploy (Recommended)
+The fastest way to deploy using Railway CLI:
+
+```bash
+railway up --service 9a5c62f2-b03b-4809-b02d-0c94ffa01622
+```
+
+**Note:** Railway CLI is already configured and authenticated on this system.
+
+### 2. 🖱️ Manual Deploy (Alternative)
+Deploy via Railway Dashboard:
 
 1. Visit [Your Project Dashboard](https://railway.com/project/42a0fb07-6c26-400d-bfd2-81fbbf03a5fc)
 2. Go to your service deployment page
@@ -19,17 +28,17 @@ The easiest way to deploy:
 4. Railway will automatically pull the latest code from GitHub
 5. Monitor deployment logs for any issues
 
-### 2. 🤖 Automated Script Deploy
+### 3. 🤖 Automated Script Deploy (Legacy)
 Run the deployment script:
 
 ```bash
 ./deploy-to-railway.sh
 ```
 
-**Note:** This requires Railway CLI authentication which may not work in all environments.
+**Note:** The script is outdated. Use CLI deploy method instead.
 
-### 3. 📋 Manual CLI Deploy
-If you need to use Railway CLI manually:
+### 4. 📋 CLI Setup (If Needed)
+If Railway CLI needs to be set up from scratch:
 
 ```bash
 # Install Railway CLI (if not installed)
@@ -41,9 +50,11 @@ railway login
 # Link to your specific project
 railway link --project 42a0fb07-6c26-400d-bfd2-81fbbf03a5fc
 
-# Deploy
-railway up
+# Deploy with service ID
+railway up --service 9a5c62f2-b03b-4809-b02d-0c94ffa01622
 ```
+
+**Note:** This system is already configured. Use method 1 instead.
 
 ## Environment Variables
 Your Railway project should have these environment variables set:
