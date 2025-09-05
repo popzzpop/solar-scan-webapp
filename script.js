@@ -1,33 +1,83 @@
 let map;
 let currentMarker;
 let savingsChart;
+let googleApiKey;
 
-document.addEventListener('DOMContentLoaded', function() {
-    initializeMap();
+document.addEventListener('DOMContentLoaded', async function() {
+    // Load Google API key and initialize Google Maps
+    await loadGoogleMapsAPI();
     setupEventListeners();
 });
 
-function initializeMap() {
-    map = L.map('map').setView([37.7749, -122.4194], 13);
-    
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors'
-    }).addTo(map);
+async function loadGoogleMapsAPI() {
+    try {
+        // Get API key from server
+        const configResponse = await fetch('/api/config');
+        const config = await configResponse.json();
+        googleApiKey = config.googleApiKey;
+        
+        // Load Google Maps JavaScript API
+        const script = document.createElement('script');
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${googleApiKey}&libraries=geometry,drawing`;
+        script.onload = initializeMap;
+        document.head.appendChild(script);
+        
+    } catch (error) {
+        console.error('Error loading Google Maps API:', error);
+        // Fallback initialization
+        initializeMap();
+    }
+}
 
-    map.on('click', function(e) {
-        const lat = e.latlng.lat;
-        const lng = e.latlng.lng;
+function initializeMap() {
+    const mapOptions = {
+        center: { lat: 37.7749, lng: -122.4194 },
+        zoom: 13,
+        mapTypeId: 'hybrid', // Show satellite imagery
+        mapTypeControl: true,
+        mapTypeControlOptions: {
+            style: google.maps.MapTypeControlStyle.HORIZONTAL_BAR,
+            position: google.maps.ControlPosition.TOP_CENTER,
+            mapTypeIds: ['roadmap', 'satellite', 'hybrid', 'terrain']
+        }
+    };
+
+    map = new google.maps.Map(document.getElementById('map'), mapOptions);
+
+    // Add click listener for solar analysis
+    map.addListener('click', function(event) {
+        const lat = event.latLng.lat();
+        const lng = event.latLng.lng();
         analyzeSolarPotential(lat, lng);
         
+        // Remove previous marker
         if (currentMarker) {
-            map.removeLayer(currentMarker);
+            currentMarker.setMap(null);
         }
         
-        currentMarker = L.marker([lat, lng]).addTo(map)
-            .bindPopup(`Analyzing solar potential for<br>Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`)
-            .openPopup();
+        // Add new marker
+        currentMarker = new google.maps.Marker({
+            position: { lat: lat, lng: lng },
+            map: map,
+            title: `Solar Analysis: ${lat.toFixed(4)}, ${lng.toFixed(4)}`
+        });
+        
+        // Add info window
+        const infoWindow = new google.maps.InfoWindow({
+            content: `Analyzing solar potential for<br>Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`
+        });
+        infoWindow.open(map, currentMarker);
     });
 }
+
+// Fallback initialization if Google Maps fails to load
+window.initMap = function() {
+    if (typeof google === 'undefined') {
+        console.warn('Google Maps API not available');
+        return;
+    }
+    initializeMap();
+};
 
 function setupEventListeners() {
     const searchBtn = document.getElementById('searchBtn');
@@ -51,16 +101,27 @@ async function handleAddressSearch() {
     try {
         const coords = await geocodeAddress(address);
         if (coords) {
-            map.setView([coords.lat, coords.lng], 18);
+            map.setCenter({ lat: coords.lat, lng: coords.lng });
+            map.setZoom(18);
             analyzeSolarPotential(coords.lat, coords.lng);
             
+            // Remove previous marker
             if (currentMarker) {
-                map.removeLayer(currentMarker);
+                currentMarker.setMap(null);
             }
             
-            currentMarker = L.marker([coords.lat, coords.lng]).addTo(map)
-                .bindPopup(`Solar analysis for:<br>${address}`)
-                .openPopup();
+            // Add new marker
+            currentMarker = new google.maps.Marker({
+                position: { lat: coords.lat, lng: coords.lng },
+                map: map,
+                title: `Solar analysis for: ${address}`
+            });
+            
+            // Add info window
+            const infoWindow = new google.maps.InfoWindow({
+                content: `Solar analysis for:<br>${address}`
+            });
+            infoWindow.open(map, currentMarker);
         }
     } catch (error) {
         alert('Could not find the specified address');
@@ -68,14 +129,15 @@ async function handleAddressSearch() {
 }
 
 async function geocodeAddress(address) {
+    // Use Google's Geocoding API through our server
     try {
-        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`);
+        const response = await fetch(`/api/geocode?address=${encodeURIComponent(address)}`);
         const data = await response.json();
         
-        if (data && data.length > 0) {
+        if (data.lat && data.lng) {
             return {
-                lat: parseFloat(data[0].lat),
-                lng: parseFloat(data[0].lon)
+                lat: data.lat,
+                lng: data.lng
             };
         }
         return null;
@@ -101,14 +163,18 @@ async function analyzeSolarPotential(lat, lng) {
             throw new Error(buildingData.error);
         }
 
-        displayResults(buildingData);
-        
+        // Fetch data layers in parallel
         const dataLayersResponse = await fetchDataLayers(lat, lng);
         
-        // Store data layers for roof visualization
+        // Combine building data and data layers
+        const combinedData = { ...buildingData };
         if (dataLayersResponse && !dataLayersResponse.error) {
-            currentSolarData.dataLayers = dataLayersResponse;
+            combinedData.dataLayers = dataLayersResponse;
         }
+        
+        // Store combined data and display results
+        currentSolarData = combinedData;
+        displayResults(combinedData);
         
         loadingIndicator.classList.add('hidden');
         resultsPanel.classList.remove('hidden');
@@ -364,8 +430,8 @@ const originalDisplayResults = displayResults;
 displayResults = function(data) {
     originalDisplayResults(data);
     
-    // Store current data for panel calculations
-    currentSolarData = data;
+    // Note: currentSolarData is already set in analyzeSolarPotential
+    // Don't overwrite it here to preserve dataLayers
     
     if (data.solarPotential) {
         setupPanelSelector(data.solarPotential);
@@ -761,24 +827,25 @@ function drawPanelsForConfig(config, panelCount) {
 function drawPanelsForSegment(segment, panelCount, canvasWidth, canvasHeight) {
     if (!roofContext) return;
     
-    // Calculate panel positions based on roof segment
-    // This is a simplified approach - in reality we'd use the exact geometry
-    const segmentIndex = segment.segmentIndex || 0;
+    // Use a better distribution approach that doesn't create grid conflicts
+    const padding = 20;
+    const availableWidth = canvasWidth - (padding * 2);
+    const availableHeight = canvasHeight - (padding * 2);
     
-    // Map segment to canvas area (simplified)
-    const cols = Math.ceil(Math.sqrt(panelCount));
+    // Calculate optimal panel layout
+    const cols = Math.min(Math.ceil(Math.sqrt(panelCount * (availableWidth / availableHeight))), 8);
     const rows = Math.ceil(panelCount / cols);
     
-    // Create segment-specific area
-    const segmentArea = {
-        x: (segmentIndex % 3) * (canvasWidth / 3) + 20,
-        y: Math.floor(segmentIndex / 3) * (canvasHeight / 3) + 20,
-        width: canvasWidth / 3 - 40,
-        height: canvasHeight / 3 - 40
-    };
+    // Calculate panel dimensions with proper spacing
+    const spacing = 2;
+    const panelWidth = Math.max((availableWidth - (cols - 1) * spacing) / cols, 20);
+    const panelHeight = Math.max((availableHeight - (rows - 1) * spacing) / rows, 15);
     
-    const panelWidth = segmentArea.width / cols - 4;
-    const panelHeight = segmentArea.height / rows - 4;
+    // Center the panel array
+    const totalWidth = cols * panelWidth + (cols - 1) * spacing;
+    const totalHeight = rows * panelHeight + (rows - 1) * spacing;
+    const startX = padding + (availableWidth - totalWidth) / 2;
+    const startY = padding + (availableHeight - totalHeight) / 2;
     
     // Set panel color based on efficiency (azimuth/pitch affect efficiency)
     const efficiency = calculatePanelEfficiency(segment.azimuthDegrees, segment.pitchDegrees);
@@ -790,8 +857,8 @@ function drawPanelsForSegment(segment, panelCount, canvasWidth, canvasHeight) {
     
     for (let row = 0; row < rows && panelsDrawn < panelCount; row++) {
         for (let col = 0; col < cols && panelsDrawn < panelCount; col++) {
-            const x = segmentArea.x + col * (panelWidth + 4);
-            const y = segmentArea.y + row * (panelHeight + 4);
+            const x = startX + col * (panelWidth + spacing);
+            const y = startY + row * (panelHeight + spacing);
             
             // Draw panel
             roofContext.fillRect(x, y, panelWidth, panelHeight);

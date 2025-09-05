@@ -84,6 +84,51 @@ app.get('/api/solar/data-layers/:lat/:lng', async (req, res) => {
   }
 });
 
+app.get('/api/config', (req, res) => {
+  res.json({
+    googleApiKey: process.env.GOOGLE_SOLAR_API_KEY
+  });
+});
+
+app.get('/api/geocode', async (req, res) => {
+  const { address } = req.query;
+  const apiKey = process.env.GOOGLE_SOLAR_API_KEY;
+
+  if (!address) {
+    return res.status(400).json({ error: 'Address parameter required' });
+  }
+
+  if (!apiKey) {
+    return res.status(500).json({ error: 'Google API key not configured' });
+  }
+
+  try {
+    const response = await fetch(
+      `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`
+    );
+
+    if (!response.ok) {
+      throw new Error(`Geocoding API request failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    if (data.results && data.results.length > 0) {
+      const location = data.results[0].geometry.location;
+      res.json({
+        lat: location.lat,
+        lng: location.lng,
+        formatted_address: data.results[0].formatted_address
+      });
+    } else {
+      res.status(404).json({ error: 'Address not found' });
+    }
+  } catch (error) {
+    console.error('Geocoding error:', error);
+    res.status(500).json({ error: 'Failed to geocode address' });
+  }
+});
+
 app.get('/api/solar/image-proxy', async (req, res) => {
   const { url, type } = req.query;
   
@@ -105,7 +150,8 @@ app.get('/api/solar/image-proxy', async (req, res) => {
     console.log(`${type} image content type:`, contentType);
 
     // Pass through the image data
-    const imageBuffer = await response.buffer();
+    const arrayBuffer = await response.arrayBuffer();
+    const imageBuffer = Buffer.from(arrayBuffer);
     
     // Set appropriate headers
     res.set('Content-Type', contentType || 'image/png');
