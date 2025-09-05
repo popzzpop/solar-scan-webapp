@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Railway Deployment Script for Solar Scan
-# Your Railway API Key: 3a379831-9b2f-49d0-bfcd-641bc4388d5e
+# Your Railway API Key: abd21df9-52c9-4cf4-af04-716cba381ec5
 
 echo "🚀 Deploying Solar Scan to Railway..."
 
@@ -20,15 +20,15 @@ if ! command -v railway &> /dev/null; then
 fi
 
 # Set Railway API token
-export RAILWAY_TOKEN="3a379831-9b2f-49d0-bfcd-641bc4388d5e"
+export RAILWAY_TOKEN="abd21df9-52c9-4cf4-af04-716cba381ec5"
 
 # Login to Railway (using API token)
 echo "🔑 Authenticating with Railway..."
 railway login
 
-# Initialize and deploy
-echo "📦 Initializing Railway project..."
-railway init
+# Link to existing project
+echo "📦 Linking to Railway project..."
+railway link --project 42a0fb07-6c26-400d-bfd2-81fbbf03a5fc
 
 echo "🔧 Setting environment variables..."
 railway variables set GOOGLE_SOLAR_API_KEY="AIzaSyB0kDcpY2spi-xXkWTvPdWFImAnu9aDDYc"

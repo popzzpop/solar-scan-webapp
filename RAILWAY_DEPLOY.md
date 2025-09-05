@@ -1,88 +1,142 @@
 # 🚀 Railway Deployment Guide
 
-## Quick Deploy (Automated Script)
+## Current Railway Project
+- **Project ID:** 42a0fb07-6c26-400d-bfd2-81fbbf03a5fc
+- **Service ID:** 9a5c62f2-b03b-4809-b02d-0c94ffa01622
+- **Environment ID:** 6b3e05b6-f7f5-452a-9966-eba2ee133953
+- **Live URL:** https://shimmering-cooperation-production.up.railway.app
+- **Railway Token:** abd21df9-52c9-4cf4-af04-716cba381ec5
+- **Project Dashboard:** https://railway.com/project/42a0fb07-6c26-400d-bfd2-81fbbf03a5fc
 
-Run the deployment script I've created:
+## Quick Deploy Methods
+
+### 1. 🖱️ Manual Deploy (Recommended)
+The easiest way to deploy:
+
+1. Visit [Your Project Dashboard](https://railway.com/project/42a0fb07-6c26-400d-bfd2-81fbbf03a5fc)
+2. Go to your service deployment page
+3. Click **"Deploy"** or **"Redeploy"** button
+4. Railway will automatically pull the latest code from GitHub
+5. Monitor deployment logs for any issues
+
+### 2. 🤖 Automated Script Deploy
+Run the deployment script:
 
 ```bash
 ./deploy-to-railway.sh
 ```
 
-This script will:
-1. Install Railway CLI (if needed)
-2. Authenticate with your API key
-3. Initialize the project
-4. Set environment variables
-5. Deploy to Railway
+**Note:** This requires Railway CLI authentication which may not work in all environments.
 
-## Manual Deployment Steps
+### 3. 📋 Manual CLI Deploy
+If you need to use Railway CLI manually:
 
-If you prefer to deploy manually:
-
-### 1. Install Railway CLI
 ```bash
-# Option A: Using curl
+# Install Railway CLI (if not installed)
 curl -fsSL https://railway.app/install.sh | sh
 
-# Option B: Using npm (if you have permissions)
-npm install -g @railway/cli
-
-# Option C: Using brew (macOS)
-brew install railway
-```
-
-### 2. Authenticate
-```bash
-export RAILWAY_TOKEN="3a379831-9b2f-49d0-bfcd-641bc4388d5e"
+# Login to Railway (requires browser)
 railway login
-```
 
-### 3. Initialize Project
-```bash
-cd "/Users/maciejpopiel/Solar Scan - Claude"
-railway init
-```
+# Link to your specific project
+railway link --project 42a0fb07-6c26-400d-bfd2-81fbbf03a5fc
 
-### 4. Set Environment Variables
-```bash
-railway variables set GOOGLE_SOLAR_API_KEY="AIzaSyB0kDcpY2spi-xXkWTvPdWFImAnu9aDDYc"
-railway variables set NODE_ENV="production"
-```
-
-### 5. Deploy
-```bash
+# Deploy
 railway up
 ```
 
-### 6. Get Deployment URL
+## Environment Variables
+Your Railway project should have these environment variables set:
+
 ```bash
-railway status
+GOOGLE_SOLAR_API_KEY=AIzaSyB0kDcpY2spi-xXkWTvPdWFImAnu9aDDYc
+NODE_ENV=production
 ```
 
-## 🔧 Post-Deployment
+To check/set them:
+```bash
+railway variables
+railway variables set VARIABLE_NAME="value"
+```
 
-After deployment:
+## Deployment Configuration
 
-1. **Test the app** with some addresses
-2. **Check logs**: `railway logs`
-3. **Monitor metrics** in Railway dashboard
-4. **Set custom domain** (optional): `railway domain`
+### railway.json
+The project uses this Railway configuration:
+```json
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "NIXPACKS"
+  },
+  "deploy": {
+    "startCommand": "npm start"
+  }
+}
+```
 
-## ✅ Your Solar Scan App Will Have
+### Key Points:
+- **No build step** - Uses vanilla JS (no Vite build)
+- **Start command:** `npm start` runs server.js
+- **Auto-deploys** from GitHub main branch
+- **Port:** Railway automatically assigns PORT environment variable
 
-- **Live Solar Analysis** powered by Google Solar API
-- **Interactive Maps** for location selection
-- **Real-time Financial Projections**
-- **Mobile-responsive Design**
-- **Professional UI** ready for users
+## Troubleshooting
 
-The app will be live at your Railway-generated URL within minutes!
+### Common Issues:
 
-## 🆘 Troubleshooting
+**1. Map/Search not working:**
+- Check if script.js is loading properly
+- Verify server.js serves static files correctly
+- Look for console errors in browser
 
-- **CLI not found**: Install using one of the methods above
-- **Permission denied**: Use `sudo` or brew installation method
-- **API key issues**: Double-check the environment variables
-- **Build failures**: Check Railway logs for detailed errors
+**2. API errors:**
+- Verify GOOGLE_SOLAR_API_KEY is set
+- Check Railway logs: `railway logs`
 
-Your Solar Scan webapp is ready to go live! 🌞
+**3. Deployment fails:**
+- Check GitHub Actions are passing
+- Verify railway.json configuration
+- Review Railway build logs
+
+**4. CLI authentication fails:**
+- Use manual dashboard deployment instead
+- Ensure you're logged in: `railway login`
+- Check project linking: `railway status`
+
+### Commands for Debugging:
+
+```bash
+# Check project status
+railway status
+
+# View deployment logs
+railway logs
+
+# Check environment variables
+railway variables
+
+# Get project URL
+railway domain
+```
+
+## Post-Deployment Checklist
+
+After successful deployment:
+
+1. ✅ **Test the live URL:** https://shimmering-cooperation-production.up.railway.app
+2. ✅ **Verify map loads** - Check Leaflet map appears
+3. ✅ **Test search functionality** - Try searching for an address
+4. ✅ **Check console** - No JavaScript errors
+5. ✅ **Test API endpoints** - Solar data requests work
+6. ✅ **Mobile responsive** - Test on different screen sizes
+
+## Support
+
+- **Railway Docs:** https://docs.railway.app/
+- **Project Dashboard:** https://railway.com/project/42a0fb07-6c26-400d-bfd2-81fbbf03a5fc
+- **GitHub Repository:** https://github.com/popzzpop/solar-scan-webapp
+
+---
+
+💡 **Pro Tip:** Railway auto-deploys from GitHub, so simply pushing to main branch should trigger a deployment. Use the manual dashboard method if CLI fails.
