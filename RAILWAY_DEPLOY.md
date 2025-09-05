@@ -10,16 +10,26 @@
 
 ## Quick Deploy Methods
 
-### 1. 🚀 CLI Deploy (Recommended)
-The fastest way to deploy using Railway CLI:
+### 1. 🚀 Production Deploy (Main Branch)
+Deploy production version using Railway CLI:
 
 ```bash
+# Ensure you're on main branch
+git checkout main
 railway up --service 9a5c62f2-b03b-4809-b02d-0c94ffa01622
 ```
 
-**Note:** Railway CLI is already configured and authenticated on this system.
+### 2. 🧪 Development Deploy (Feature Branch)
+Deploy development version for testing:
 
-### 2. 🖱️ Manual Deploy (Alternative)
+```bash
+# Deploy current feature branch to production service (for testing)
+railway up --service 9a5c62f2-b03b-4809-b02d-0c94ffa01622
+```
+
+**⚠️ Note:** This will temporarily replace production. For proper development environment, see setup below.
+
+### 3. 🖱️ Manual Deploy (Alternative)
 Deploy via Railway Dashboard:
 
 1. Visit [Your Project Dashboard](https://railway.com/project/42a0fb07-6c26-400d-bfd2-81fbbf03a5fc)
@@ -55,6 +65,53 @@ railway up --service 9a5c62f2-b03b-4809-b02d-0c94ffa01622
 ```
 
 **Note:** This system is already configured. Use method 1 instead.
+
+## 🧪 Development Environment Setup
+
+### Option 1: Create Railway Development Environment (Recommended)
+
+1. **Go to Railway Dashboard:**
+   - Visit: https://railway.com/project/42a0fb07-6c26-400d-bfd2-81fbbf03a5fc
+   - Click **"New Environment"** or **"Environments"** tab
+
+2. **Create Development Environment:**
+   - Name: `development` or `staging`
+   - Branch: `feature/new-development` (or your feature branch)
+   - This creates a separate deployment URL
+
+3. **Configure Branch Auto-Deploy:**
+   - Set source branch to your feature branch
+   - Enable auto-deploy on push
+   - Configure environment variables (copy from production)
+
+4. **Get Development URL:**
+   - Will be something like: `https://development-shimmering-cooperation.up.railway.app`
+   - Or: `https://staging-shimmering-cooperation.up.railway.app`
+
+### Option 2: Quick Development Testing
+
+For quick feature testing without separate environment:
+
+```bash
+# Switch to your feature branch
+git checkout feature/new-development
+
+# Deploy to production service temporarily
+railway up --service 9a5c62f2-b03b-4809-b02d-0c94ffa01622
+
+# ⚠️ This replaces production temporarily
+# Switch back to main and redeploy when done:
+# git checkout main
+# railway up --service 9a5c62f2-b03b-4809-b02d-0c94ffa01622
+```
+
+### Option 3: Preview Deployments
+
+Enable automatic preview deployments:
+1. In Railway dashboard, go to Settings
+2. Enable "Preview Deployments"  
+3. Every PR will get its own temporary URL
+4. Automatically deploys feature branches
 
 ## Environment Variables
 Your Railway project should have these environment variables set:
