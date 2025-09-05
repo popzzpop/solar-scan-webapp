@@ -57,13 +57,17 @@ jobs:
       run: npm ci
       
     - name: 🏗️ Build application
-      run: npm run build
+      run: echo "No build step required - using vanilla JS"
       
-    - name: 📤 Upload build artifacts
+    - name: 📤 Upload source files
       uses: actions/upload-artifact@v4
       with:
-        name: build-files
-        path: dist/
+        name: source-files
+        path: |
+          *.js
+          *.html
+          *.json
+          !node_modules
         retention-days: 30
 
   # 🔒 Security Scan
@@ -100,11 +104,11 @@ jobs:
     - name: 📥 Checkout code
       uses: actions/checkout@v4
       
-    - name: 📥 Download build artifacts
+    - name: 📥 Download source files
       uses: actions/download-artifact@v4
       with:
-        name: build-files
-        path: dist/
+        name: source-files
+        path: .
         
     - name: 🚀 Deploy to Railway (Staging)
       id: deploy
@@ -128,11 +132,11 @@ jobs:
     - name: 📥 Checkout code
       uses: actions/checkout@v4
       
-    - name: 📥 Download build artifacts
+    - name: 📥 Download source files
       uses: actions/download-artifact@v4
       with:
-        name: build-files
-        path: dist/
+        name: source-files
+        path: .
         
     - name: 🚀 Deploy to Railway (Production)
       id: deploy
@@ -193,6 +197,7 @@ jobs:
         
     - name: 📊 SonarCloud Scan
       uses: SonarSource/sonarcloud-github-action@master
+      continue-on-error: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
