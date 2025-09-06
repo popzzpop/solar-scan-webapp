@@ -452,7 +452,7 @@ async function initializeRoofVisualization() {
     await drawSimplifiedRoofVisualization();
 }
 
-// Simplified roof visualization using Google Maps-style approach
+// Proper roof visualization using real Google Solar API data
 async function drawSimplifiedRoofVisualization() {
     const ctx = roofContexts.base;
     const width = roofCanvases.base.width;
@@ -460,26 +460,17 @@ async function drawSimplifiedRoofVisualization() {
     
     if (!ctx) return;
     
-    console.log('Drawing simplified roof visualization');
+    console.log('Drawing roof visualization with real API data');
     
-    // Clear and draw base satellite-style background
+    // Clear canvas
     ctx.clearRect(0, 0, width, height);
     
-    // Create satellite-style background
-    const gradient = ctx.createLinearGradient(0, 0, width, height);
-    gradient.addColorStop(0, '#e8f4f8');
-    gradient.addColorStop(0.3, '#d1e7dd'); 
-    gradient.addColorStop(0.7, '#c3d9c7');
-    gradient.addColorStop(1, '#a8c5a3');
-    
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, width, height);
-    
-    // Draw building/roof outline based on solar data
-    if (currentSolarData && currentSolarData.solarPotential) {
-        drawBuilding3D(ctx, width, height);
+    // Calculate building bounds from solar data
+    if (currentSolarData && currentSolarData.solarPotential && currentSolarData.solarPotential.solarPanels) {
+        await drawRealBuildingWithSatellite(ctx, width, height);
     } else {
-        drawEnhancedFallbackRoof();
+        // Fallback for no solar data
+        drawNoDataFallback(ctx, width, height);
     }
     
     // Load flux data for heat map overlay if available
@@ -496,101 +487,157 @@ async function drawSimplifiedRoofVisualization() {
     console.log('Roof visualization ready');
 }
 
-// Draw 3D building representation using solar API data
-function drawBuilding3D(ctx, width, height) {
+// Draw real building using satellite imagery and panel bounds
+async function drawRealBuildingWithSatellite(ctx, width, height) {
     const solar = currentSolarData.solarPotential;
+    const panels = solar.solarPanels || [];
+    const buildingCenter = currentSolarData.center;
     
-    // Calculate building dimensions from solar data
-    const roofArea = solar.wholeRoofStats?.areaMeters2 || 100;
-    const buildingScale = Math.min(width, height) * 0.7;
-    const aspectRatio = Math.sqrt(roofArea / 150); // Approximate aspect ratio
-    
-    const buildingWidth = buildingScale * 0.8;
-    const buildingHeight = buildingScale * 0.6;
-    
-    const centerX = width / 2;
-    const centerY = height / 2;
-    
-    // Building base
-    const baseLeft = centerX - buildingWidth / 2;
-    const baseRight = centerX + buildingWidth / 2;
-    const baseTop = centerY - buildingHeight / 2;
-    const baseBottom = centerY + buildingHeight / 2;
-    
-    // 3D effect offsets
-    const depth = 15;
-    
-    // Draw building shadow
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
-    ctx.fillRect(baseLeft + depth, baseTop + depth, buildingWidth, buildingHeight);
-    
-    // Draw building base (roof)
-    const roofGradient = ctx.createLinearGradient(baseLeft, baseTop, baseRight, baseBottom);
-    roofGradient.addColorStop(0, '#8b7355');
-    roofGradient.addColorStop(0.5, '#a0845c');
-    roofGradient.addColorStop(1, '#6b5b47');
-    
-    ctx.fillStyle = roofGradient;
-    ctx.fillRect(baseLeft, baseTop, buildingWidth, buildingHeight);
-    
-    // Draw building sides for 3D effect
-    ctx.fillStyle = '#7a6b57';
-    // Right side
-    ctx.beginPath();
-    ctx.moveTo(baseRight, baseTop);
-    ctx.lineTo(baseRight + depth, baseTop - depth);
-    ctx.lineTo(baseRight + depth, baseBottom - depth);
-    ctx.lineTo(baseRight, baseBottom);
-    ctx.closePath();
-    ctx.fill();
-    
-    // Top side
-    ctx.fillStyle = '#8f7d69';
-    ctx.beginPath();
-    ctx.moveTo(baseLeft, baseTop);
-    ctx.lineTo(baseLeft + depth, baseTop - depth);
-    ctx.lineTo(baseRight + depth, baseTop - depth);
-    ctx.lineTo(baseRight, baseTop);
-    ctx.closePath();
-    ctx.fill();
-    
-    // Add roof details/shingles pattern
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
-    ctx.lineWidth = 1;
-    
-    const shingleSpacing = 12;
-    for (let y = baseTop; y < baseBottom; y += shingleSpacing) {
-        ctx.beginPath();
-        ctx.moveTo(baseLeft, y);
-        ctx.lineTo(baseRight, y);
-        ctx.stroke();
+    if (panels.length === 0 || !buildingCenter) {
+        drawNoDataFallback(ctx, width, height);
+        return;
     }
     
-    for (let x = baseLeft; x < baseRight; x += shingleSpacing) {
-        ctx.beginPath();
-        ctx.moveTo(x, baseTop);
-        ctx.lineTo(x, baseBottom);
-        ctx.stroke();
-    }
+    console.log('Drawing real building with satellite imagery', {
+        panelCount: panels.length,
+        center: buildingCenter
+    });
     
-    // Add building outline
-    ctx.strokeStyle = '#5a4a3a';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(baseLeft, baseTop, buildingWidth, buildingHeight);
+    // Calculate bounds from all panels
+    const bounds = calculatePanelBounds(panels);
+    console.log('Panel bounds:', bounds);
     
-    // Add some architectural details
-    const windowSize = 8;
-    const windowSpacing = 25;
+    // Store bounds globally for panel coordinate conversion
+    window.buildingBounds = bounds;
+    window.canvasDimensions = { width, height };
     
-    // Add small windows on the sides for realism
-    ctx.fillStyle = '#2c3e50';
-    for (let i = 1; i < 3; i++) {
-        const windowX = baseLeft + i * windowSpacing;
-        const windowY = baseBottom - windowSize * 2;
-        if (windowX < baseRight - windowSize) {
-            ctx.fillRect(windowX, windowY, windowSize, windowSize);
+    // Try to load Google Static Maps API satellite image
+    try {
+        const satelliteImg = await loadGoogleSatelliteImage(buildingCenter, bounds, width, height);
+        if (satelliteImg) {
+            ctx.drawImage(satelliteImg, 0, 0, width, height);
+            console.log('Satellite imagery loaded successfully');
+            return;
         }
+    } catch (err) {
+        console.warn('Could not load satellite imagery:', err);
     }
+    
+    // Fallback: Draw satellite-style background with building outline
+    drawSatelliteStyleBackground(ctx, width, height, bounds);
+}
+
+// Calculate bounds from all solar panels
+function calculatePanelBounds(panels) {
+    if (panels.length === 0) return null;
+    
+    let minLat = panels[0].center.latitude;
+    let maxLat = panels[0].center.latitude;
+    let minLng = panels[0].center.longitude;
+    let maxLng = panels[0].center.longitude;
+    
+    for (const panel of panels) {
+        const lat = panel.center.latitude;
+        const lng = panel.center.longitude;
+        
+        if (lat < minLat) minLat = lat;
+        if (lat > maxLat) maxLat = lat;
+        if (lng < minLng) minLng = lng;
+        if (lng > maxLng) maxLng = lng;
+    }
+    
+    // Add some padding
+    const latPadding = (maxLat - minLat) * 0.2;
+    const lngPadding = (maxLng - minLng) * 0.2;
+    
+    return {
+        minLat: minLat - latPadding,
+        maxLat: maxLat + latPadding,
+        minLng: minLng - lngPadding,
+        maxLng: maxLng + lngPadding,
+        centerLat: (minLat + maxLat) / 2,
+        centerLng: (minLng + maxLng) / 2
+    };
+}
+
+// Load Google Static Maps satellite image
+async function loadGoogleSatelliteImage(center, bounds, width, height) {
+    if (!googleApiKey) return null;
+    
+    const zoom = calculateOptimalZoom(bounds, width, height);
+    const staticMapUrl = `https://maps.googleapis.com/maps/api/staticmap?` +
+        `center=${center.latitude},${center.longitude}` +
+        `&zoom=${zoom}` +
+        `&size=${width}x${height}` +
+        `&maptype=satellite` +
+        `&scale=2` +
+        `&key=${googleApiKey}`;
+    
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
+        img.src = staticMapUrl;
+    });
+}
+
+// Calculate optimal zoom level for the bounds
+function calculateOptimalZoom(bounds, width, height) {
+    const latDiff = bounds.maxLat - bounds.minLat;
+    const lngDiff = bounds.maxLng - bounds.minLng;
+    
+    // Rough zoom calculation
+    const latZoom = Math.floor(Math.log2(360 / latDiff)) - 1;
+    const lngZoom = Math.floor(Math.log2(360 / lngDiff)) - 1;
+    
+    return Math.max(15, Math.min(21, Math.min(latZoom, lngZoom)));
+}
+
+// Fallback satellite-style background
+function drawSatelliteStyleBackground(ctx, width, height, bounds) {
+    // Create realistic satellite-like gradient
+    const gradient = ctx.createRadialGradient(width/2, height/2, 0, width/2, height/2, Math.max(width, height));
+    gradient.addColorStop(0, '#d4d4aa');
+    gradient.addColorStop(0.3, '#b8b894');
+    gradient.addColorStop(0.6, '#a0a080');
+    gradient.addColorStop(1, '#8a8a6a');
+    
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, width, height);
+    
+    // Add some texture to look like satellite imagery
+    ctx.fillStyle = 'rgba(100, 100, 60, 0.1)';
+    for (let i = 0; i < 50; i++) {
+        const x = Math.random() * width;
+        const y = Math.random() * height;
+        const size = Math.random() * 3 + 1;
+        ctx.fillRect(x, y, size, size);
+    }
+    
+    // Draw building outline based on bounds
+    if (bounds) {
+        const margin = 30;
+        ctx.strokeStyle = '#555544';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(margin, margin, width - margin * 2, height - margin * 2);
+        
+        ctx.fillStyle = 'rgba(80, 80, 60, 0.3)';
+        ctx.fillRect(margin, margin, width - margin * 2, height - margin * 2);
+    }
+}
+
+// Fallback when no solar data is available
+function drawNoDataFallback(ctx, width, height) {
+    ctx.fillStyle = '#f0f0f0';
+    ctx.fillRect(0, 0, width, height);
+    
+    ctx.fillStyle = '#999';
+    ctx.font = '16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('No solar panel data available', width/2, height/2 - 10);
+    ctx.font = '12px sans-serif';
+    ctx.fillText('Please analyze a different location', width/2, height/2 + 15);
 }
 
 // Helper function to load image via server proxy
@@ -765,26 +812,164 @@ function drawSolarPanels(panelCount) {
     drawBasicPanelsOnLayer(panelCount);
 }
 
-// Draw solar panels using actual roof segment data
+// Draw solar panels using actual coordinates from Google Solar API
 function drawSolarPanelsOnRealRoof(selectedPanels) {
     if (!roofContexts.panels || !currentSolarData.solarPotential) return;
     
     const solarPotential = currentSolarData.solarPotential;
+    const panels = solarPotential.solarPanels || [];
     
     // Clear panels layer first
     const width = roofCanvases.panels.width;
     const height = roofCanvases.panels.height;
     roofContexts.panels.clearRect(0, 0, width, height);
     
-    // Use actual panel configurations if available
-    if (solarPotential.solarPanelConfigs && solarPotential.solarPanelConfigs.length > 0) {
-        console.log('Drawing panels using real API configurations:', solarPotential.solarPanelConfigs);
-        drawPanelsFromApiConfigs(selectedPanels, solarPotential.solarPanelConfigs);
-    } else {
-        // Fallback to basic grid placement
-        console.log('Using fallback panel placement');
-        drawBasicPanelsOnLayer(selectedPanels);
+    if (panels.length === 0) {
+        console.log('No solar panels data available');
+        return;
     }
+    
+    // Sort panels by energy production (highest first)
+    const sortedPanels = [...panels].sort((a, b) => 
+        (b.yearlyEnergyDcKwh || 0) - (a.yearlyEnergyDcKwh || 0)
+    );
+    
+    // Take only the first N panels based on slider
+    const panelsToShow = sortedPanels.slice(0, selectedPanels);
+    
+    console.log(`Drawing ${panelsToShow.length} real panels from API data`);
+    
+    // Draw each panel at its actual GPS coordinates
+    drawRealPanelsAtCoordinates(panelsToShow, roofContexts.panels, width, height);
+}
+
+// Convert GPS coordinates to canvas coordinates and draw panels
+function drawRealPanelsAtCoordinates(panels, ctx, canvasWidth, canvasHeight) {
+    const bounds = window.buildingBounds;
+    if (!bounds) {
+        console.error('Building bounds not available for coordinate conversion');
+        return;
+    }
+    
+    // Standard solar panel dimensions (approximately 2m x 1m)
+    const panelWidthMeters = 1.65; // Standard panel width
+    const panelHeightMeters = 0.99; // Standard panel height
+    
+    panels.forEach((panel, index) => {
+        const coords = latLngToCanvasCoords(
+            panel.center.latitude, 
+            panel.center.longitude, 
+            bounds, 
+            canvasWidth, 
+            canvasHeight
+        );
+        
+        if (coords) {
+            // Calculate panel size on canvas based on zoom level
+            const panelSize = calculatePanelSizeOnCanvas(bounds, canvasWidth, canvasHeight, panelWidthMeters, panelHeightMeters);
+            
+            // Color based on energy production
+            const efficiency = (panel.yearlyEnergyDcKwh || 0) / 800; // Normalize to 0-1
+            const panelColor = getPanelColorByEfficiency(Math.min(efficiency, 1));
+            
+            // Draw panel
+            drawPanelRectangle(ctx, coords.x, coords.y, panelSize.width, panelSize.height, 
+                            panel.orientation || 'LANDSCAPE', panelColor, index);
+        }
+    });
+    
+    // Add panel count overlay
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.fillRect(10, canvasHeight - 40, 200, 30);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(`${panels.length} Solar Panels Shown`, 15, canvasHeight - 20);
+}
+
+// Convert latitude/longitude to canvas x/y coordinates
+function latLngToCanvasCoords(lat, lng, bounds, canvasWidth, canvasHeight) {
+    if (!bounds) return null;
+    
+    // Convert lat/lng to normalized coordinates (0-1)
+    const normalizedX = (lng - bounds.minLng) / (bounds.maxLng - bounds.minLng);
+    const normalizedY = (bounds.maxLat - lat) / (bounds.maxLat - bounds.minLat); // Flip Y axis
+    
+    // Convert to canvas coordinates
+    const x = normalizedX * canvasWidth;
+    const y = normalizedY * canvasHeight;
+    
+    return { x, y };
+}
+
+// Calculate how big a panel should appear on canvas based on real-world size
+function calculatePanelSizeOnCanvas(bounds, canvasWidth, canvasHeight, panelWidthMeters, panelHeightMeters) {
+    // Rough conversion: 1 degree lat ≈ 111km, lng varies by latitude
+    const latDiff = bounds.maxLat - bounds.minLat;
+    const lngDiff = bounds.maxLng - bounds.minLng;
+    
+    // Approximate meters per degree at this latitude
+    const metersPerDegreeLat = 111000;
+    const metersPerDegreeLng = 111000 * Math.cos(bounds.centerLat * Math.PI / 180);
+    
+    // Calculate panel dimensions in canvas pixels
+    const panelWidthPixels = (panelWidthMeters / metersPerDegreeLng) * (canvasWidth / lngDiff);
+    const panelHeightPixels = (panelHeightMeters / metersPerDegreeLat) * (canvasHeight / latDiff);
+    
+    return {
+        width: Math.max(4, panelWidthPixels), // Minimum 4 pixels wide
+        height: Math.max(3, panelHeightPixels) // Minimum 3 pixels high
+    };
+}
+
+// Draw individual panel rectangle
+function drawPanelRectangle(ctx, x, y, width, height, orientation, color, index) {
+    // Adjust position to center the panel
+    const panelX = x - width / 2;
+    const panelY = y - height / 2;
+    
+    // Draw panel background
+    ctx.fillStyle = color;
+    ctx.fillRect(panelX, panelY, width, height);
+    
+    // Draw panel border
+    ctx.strokeStyle = '#1e40af';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(panelX, panelY, width, height);
+    
+    // Draw panel grid lines for detail (if big enough)
+    if (width > 8 && height > 6) {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.lineWidth = 0.5;
+        
+        // Draw grid
+        const gridLines = Math.min(4, Math.floor(width / 8));
+        for (let i = 1; i < gridLines; i++) {
+            const lineX = panelX + (i * width) / gridLines;
+            ctx.beginPath();
+            ctx.moveTo(lineX, panelY);
+            ctx.lineTo(lineX, panelY + height);
+            ctx.stroke();
+        }
+        
+        const gridRows = Math.min(3, Math.floor(height / 6));
+        for (let i = 1; i < gridRows; i++) {
+            const lineY = panelY + (i * height) / gridRows;
+            ctx.beginPath();
+            ctx.moveTo(panelX, lineY);
+            ctx.lineTo(panelX + width, lineY);
+            ctx.stroke();
+        }
+    }
+}
+
+// Get panel color based on efficiency
+function getPanelColorByEfficiency(efficiency) {
+    if (efficiency > 0.8) return '#10b981'; // High efficiency - emerald green
+    if (efficiency > 0.6) return '#3b82f6'; // Good efficiency - blue
+    if (efficiency > 0.4) return '#f59e0b'; // Medium efficiency - amber
+    if (efficiency > 0.2) return '#ef4444'; // Lower efficiency - red
+    return '#6b7280'; // Very low efficiency - gray
 }
 
 // Draw panels using Google Solar API panel configurations (NEW APPROACH)
