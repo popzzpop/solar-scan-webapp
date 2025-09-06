@@ -167,6 +167,9 @@ async function analyzeSolarPotential(lat, lng) {
         const combinedData = { ...buildingData };
         if (dataLayersResponse && !dataLayersResponse.error) {
             combinedData.dataLayers = dataLayersResponse;
+            console.log('Data layers loaded successfully:', dataLayersResponse);
+        } else {
+            console.warn('Data layers not available or failed to load');
         }
         
         // Store combined data and display results
@@ -445,86 +448,148 @@ async function initializeRoofVisualization() {
         }
     });
     
-    // Load satellite imagery if available
-    if (currentSolarData.dataLayers && currentSolarData.dataLayers.rgbUrl) {
-        await loadSatelliteImagery();
-    } else {
-        // Fallback to enhanced roof outline
-        drawEnhancedFallbackRoof();
-    }
+    // Use simplified visualization approach
+    await drawSimplifiedRoofVisualization();
 }
 
-// Load satellite imagery from Google Solar API
-async function loadSatelliteImagery() {
-    const dataLayers = currentSolarData.dataLayers;
-
-    // Show loading state
-    if (roofContext) {
-        const width = roofCanvas.width;
-        const height = roofCanvas.height;
-
-        roofContext.clearRect(0, 0, width, height);
-        roofContext.fillStyle = '#f8fafc';
-        roofContext.fillRect(0, 0, width, height);
-
-        roofContext.fillStyle = '#64748b';
-        roofContext.font = '14px sans-serif';
-        roofContext.textAlign = 'center';
-        roofContext.fillText('Loading satellite imagery...', width/2, height/2);
-    }
-
-    try {
-        console.log('Loading satellite imagery with data layers:', dataLayers);
-
-        const loadPromises = [];
-
-        // Load RGB satellite image via our server proxy
-        if (dataLayers.rgbUrl) {
-            console.log('Loading RGB image from:', dataLayers.rgbUrl);
-            loadPromises.push(
-                loadImageViaProxy(dataLayers.rgbUrl, 'rgb')
-                    .then(img => { satelliteImage = img; console.log('RGB image loaded successfully'); })
-                    .catch(err => console.warn('Failed to load RGB image:', err))
-            );
-        }
-
-        // Load mask (roof boundaries)
-        if (dataLayers.maskUrl) {
-            console.log('Loading mask image from:', dataLayers.maskUrl);
-            loadPromises.push(
-                loadImageViaProxy(dataLayers.maskUrl, 'mask')
-                    .then(img => { maskImage = img; console.log('Mask image loaded successfully'); })
-                    .catch(err => console.warn('Failed to load mask image:', err))
-            );
-        }
-
-        // Load flux data (solar heat map)
-        if (dataLayers.annualFluxUrl) {
-            console.log('Loading flux image from:', dataLayers.annualFluxUrl);
-            loadPromises.push(
-                loadImageViaProxy(dataLayers.annualFluxUrl, 'flux')
-                    .then(img => { fluxImage = img; console.log('Flux image loaded successfully'); })
-                    .catch(err => console.warn('Failed to load flux image:', err))
-            );
-        }
-
-        // Wait for all images to load (or fail)
-        await Promise.allSettled(loadPromises);
-
-        console.log('Satellite imagery loading complete. Available images:',
-            { rgb: !!satelliteImage, mask: !!maskImage, flux: !!fluxImage });
-
-        // Draw the satellite view
-        if (satelliteImage || maskImage || fluxImage) {
-            drawSatelliteRoof();
-        } else {
-            // No images loaded successfully
-            drawEnhancedFallbackRoof();
-        }
-
-    } catch (error) {
-        console.error('Error loading satellite imagery:', error);
+// Simplified roof visualization using Google Maps-style approach
+async function drawSimplifiedRoofVisualization() {
+    const ctx = roofContexts.base;
+    const width = roofCanvases.base.width;
+    const height = roofCanvases.base.height;
+    
+    if (!ctx) return;
+    
+    console.log('Drawing simplified roof visualization');
+    
+    // Clear and draw base satellite-style background
+    ctx.clearRect(0, 0, width, height);
+    
+    // Create satellite-style background
+    const gradient = ctx.createLinearGradient(0, 0, width, height);
+    gradient.addColorStop(0, '#e8f4f8');
+    gradient.addColorStop(0.3, '#d1e7dd'); 
+    gradient.addColorStop(0.7, '#c3d9c7');
+    gradient.addColorStop(1, '#a8c5a3');
+    
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, width, height);
+    
+    // Draw building/roof outline based on solar data
+    if (currentSolarData && currentSolarData.solarPotential) {
+        drawBuilding3D(ctx, width, height);
+    } else {
         drawEnhancedFallbackRoof();
+    }
+    
+    // Load flux data for heat map overlay if available
+    if (currentSolarData.dataLayers && currentSolarData.dataLayers.annualFluxUrl) {
+        try {
+            const fluxImg = await loadImageViaProxy(currentSolarData.dataLayers.annualFluxUrl, 'flux');
+            fluxImage = fluxImg;
+            console.log('Flux image loaded for heat map overlay');
+        } catch (err) {
+            console.warn('Flux overlay not available:', err);
+        }
+    }
+    
+    console.log('Roof visualization ready');
+}
+
+// Draw 3D building representation using solar API data
+function drawBuilding3D(ctx, width, height) {
+    const solar = currentSolarData.solarPotential;
+    
+    // Calculate building dimensions from solar data
+    const roofArea = solar.wholeRoofStats?.areaMeters2 || 100;
+    const buildingScale = Math.min(width, height) * 0.7;
+    const aspectRatio = Math.sqrt(roofArea / 150); // Approximate aspect ratio
+    
+    const buildingWidth = buildingScale * 0.8;
+    const buildingHeight = buildingScale * 0.6;
+    
+    const centerX = width / 2;
+    const centerY = height / 2;
+    
+    // Building base
+    const baseLeft = centerX - buildingWidth / 2;
+    const baseRight = centerX + buildingWidth / 2;
+    const baseTop = centerY - buildingHeight / 2;
+    const baseBottom = centerY + buildingHeight / 2;
+    
+    // 3D effect offsets
+    const depth = 15;
+    
+    // Draw building shadow
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+    ctx.fillRect(baseLeft + depth, baseTop + depth, buildingWidth, buildingHeight);
+    
+    // Draw building base (roof)
+    const roofGradient = ctx.createLinearGradient(baseLeft, baseTop, baseRight, baseBottom);
+    roofGradient.addColorStop(0, '#8b7355');
+    roofGradient.addColorStop(0.5, '#a0845c');
+    roofGradient.addColorStop(1, '#6b5b47');
+    
+    ctx.fillStyle = roofGradient;
+    ctx.fillRect(baseLeft, baseTop, buildingWidth, buildingHeight);
+    
+    // Draw building sides for 3D effect
+    ctx.fillStyle = '#7a6b57';
+    // Right side
+    ctx.beginPath();
+    ctx.moveTo(baseRight, baseTop);
+    ctx.lineTo(baseRight + depth, baseTop - depth);
+    ctx.lineTo(baseRight + depth, baseBottom - depth);
+    ctx.lineTo(baseRight, baseBottom);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Top side
+    ctx.fillStyle = '#8f7d69';
+    ctx.beginPath();
+    ctx.moveTo(baseLeft, baseTop);
+    ctx.lineTo(baseLeft + depth, baseTop - depth);
+    ctx.lineTo(baseRight + depth, baseTop - depth);
+    ctx.lineTo(baseRight, baseTop);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Add roof details/shingles pattern
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
+    ctx.lineWidth = 1;
+    
+    const shingleSpacing = 12;
+    for (let y = baseTop; y < baseBottom; y += shingleSpacing) {
+        ctx.beginPath();
+        ctx.moveTo(baseLeft, y);
+        ctx.lineTo(baseRight, y);
+        ctx.stroke();
+    }
+    
+    for (let x = baseLeft; x < baseRight; x += shingleSpacing) {
+        ctx.beginPath();
+        ctx.moveTo(x, baseTop);
+        ctx.lineTo(x, baseBottom);
+        ctx.stroke();
+    }
+    
+    // Add building outline
+    ctx.strokeStyle = '#5a4a3a';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(baseLeft, baseTop, buildingWidth, buildingHeight);
+    
+    // Add some architectural details
+    const windowSize = 8;
+    const windowSpacing = 25;
+    
+    // Add small windows on the sides for realism
+    ctx.fillStyle = '#2c3e50';
+    for (let i = 1; i < 3; i++) {
+        const windowX = baseLeft + i * windowSpacing;
+        const windowY = baseBottom - windowSize * 2;
+        if (windowX < baseRight - windowSize) {
+            ctx.fillRect(windowX, windowY, windowSize, windowSize);
+        }
     }
 }
 
@@ -560,66 +625,6 @@ async function loadImageViaProxy(geoTiffUrl, type) {
     }
 }
 
-// Helper function to load image from URL (fallback)
-function loadImage(url) {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => resolve(img);
-        img.onerror = reject;
-        img.src = url;
-    });
-}
-
-// Draw satellite roof with imagery using layered approach
-function drawSatelliteRoof() {
-    if (!roofContexts.base) return;
-    
-    const width = roofCanvases.base.width;
-    const height = roofCanvases.base.height;
-    
-    // Layer 1: Base satellite image
-    if (satelliteImage && roofContexts.base) {
-        console.log('Drawing satellite image on base layer...');
-        roofContexts.base.clearRect(0, 0, width, height);
-        roofContexts.base.drawImage(satelliteImage, 0, 0, width, height);
-    }
-    
-    // Layer 2: Roof mask overlay
-    if (maskImage && roofContexts.mask) {
-        console.log('Drawing roof mask on mask layer...');
-        roofContexts.mask.clearRect(0, 0, width, height);
-        roofContexts.mask.drawImage(maskImage, 0, 0, width, height);
-    }
-    
-    // Layer 3: Solar flux heat map (only if enabled)
-    if (roofContexts.flux) {
-        roofContexts.flux.clearRect(0, 0, width, height);
-        if (showFluxOverlay && fluxImage) {
-            console.log('Drawing flux overlay on flux layer...');
-            roofContexts.flux.drawImage(fluxImage, 0, 0, width, height);
-        }
-    }
-    
-    // Layer 4: Panels layer (will be drawn separately)
-    if (roofContexts.panels) {
-        roofContexts.panels.clearRect(0, 0, width, height);
-    }
-    
-    // Fallback message if no satellite image
-    if (!satelliteImage && roofContexts.base) {
-        console.log('No satellite image available, showing placeholder...');
-        roofContexts.base.fillStyle = '#f8fafc';
-        roofContexts.base.fillRect(0, 0, width, height);
-        
-        roofContexts.base.fillStyle = '#64748b';
-        roofContexts.base.font = '16px sans-serif';
-        roofContexts.base.textAlign = 'center';
-        roofContexts.base.fillText('Loading satellite imagery...', width/2, height/2 - 10);
-        roofContexts.base.font = '12px sans-serif';
-        roofContexts.base.fillText('(Satellite data may not be available for all locations)', width/2, height/2 + 15);
-    }
-}
 
 // Draw basic roof representation (LEGACY - redirects to enhanced fallback)
 function drawBasicRoof() {
@@ -734,11 +739,19 @@ function drawEnhancedFallbackRoof() {
 async function updateRoofVisualization(selectedPanels) {
     if (!roofContexts.base || maxPanels === 0) return;
     
-    // Redraw roof background (satellite or basic)
-    if (satelliteImage) {
-        drawSatelliteRoof();
-    } else {
-        drawEnhancedFallbackRoof();
+    // Redraw roof background using simplified approach
+    await drawSimplifiedRoofVisualization();
+    
+    // Draw flux overlay if enabled
+    if (showFluxOverlay && fluxImage && roofContexts.flux) {
+        const width = roofCanvases.flux.width;
+        const height = roofCanvases.flux.height;
+        roofContexts.flux.clearRect(0, 0, width, height);
+        roofContexts.flux.drawImage(fluxImage, 0, 0, width, height);
+    } else if (roofContexts.flux) {
+        const width = roofCanvases.flux.width;
+        const height = roofCanvases.flux.height;
+        roofContexts.flux.clearRect(0, 0, width, height);
     }
     
     if (selectedPanels > 0) {
