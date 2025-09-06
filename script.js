@@ -6,6 +6,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Load Google API key and initialize Google Maps
     await loadGoogleMapsAPI();
     setupEventListeners();
+    // Setup panel configuration once (not per location)
+    setupPanelConfiguration();
 });
 
 async function loadGoogleMapsAPI() {
@@ -146,9 +148,72 @@ async function geocodeAddress(address) {
     }
 }
 
+// Clear all state from previous analysis to prevent chaos
+function clearPreviousAnalysisState() {
+    console.log('Clearing previous analysis state');
+    
+    // Clear global variables
+    currentSolarData = null;
+    maxPanels = 0;
+    satelliteImage = null;
+    maskImage = null;
+    fluxImage = null;
+    showFluxOverlay = false;
+    
+    // Clear building bounds
+    window.buildingBounds = null;
+    window.canvasDimensions = null;
+    
+    // Clear all canvas layers
+    if (roofContexts) {
+        Object.keys(roofContexts).forEach(layer => {
+            const context = roofContexts[layer];
+            const canvas = roofCanvases[layer];
+            if (context && canvas) {
+                context.clearRect(0, 0, canvas.width, canvas.height);
+            }
+        });
+    }
+    
+    // Reset slider to 0
+    const slider = document.getElementById('panelCountSlider');
+    if (slider) {
+        slider.value = 0;
+        slider.max = 0;
+        updatePanelDisplay(0);
+    }
+    
+    // Reset counters
+    const maxCountEl = document.getElementById('maxPanelCount');
+    const maxLabelEl = document.getElementById('maxPanelCountLabel');
+    if (maxCountEl) maxCountEl.textContent = '0';
+    if (maxLabelEl) maxLabelEl.textContent = '0';
+    
+    // Clear live calculations
+    document.getElementById('liveGeneration').textContent = '0 kWh';
+    document.getElementById('livePanelArea').textContent = '0 m²';
+    document.getElementById('liveCO2').textContent = '0 kg';
+    document.getElementById('liveCoverage').textContent = '0%';
+    
+    // Reset flux overlay toggle
+    const fluxToggle = document.getElementById('fluxOverlayToggle');
+    if (fluxToggle) {
+        fluxToggle.checked = false;
+    }
+    
+    // Hide roof visualization panel
+    const roofVisualizationPanel = document.getElementById('roofVisualizationPanel');
+    if (roofVisualizationPanel) {
+        roofVisualizationPanel.classList.add('hidden');
+    }
+}
+
 async function analyzeSolarPotential(lat, lng) {
     const loadingIndicator = document.getElementById('loadingIndicator');
     const resultsPanel = document.getElementById('resultsPanel');
+    
+    // Clear previous state before analyzing new location
+    clearPreviousAnalysisState();
     
     loadingIndicator.classList.remove('hidden');
     resultsPanel.classList.add('hidden');
@@ -317,12 +382,7 @@ function setupPanelConfiguration() {
     }
 }
 
-// Add to existing setupEventListeners function
-const originalSetupEventListeners = setupEventListeners;
-setupEventListeners = function() {
-    originalSetupEventListeners();
-    setupPanelConfiguration();
-};
+// Panel configuration is now setup once on page load
 
 // Handle slider changes
 function handlePanelCountChange(event) {
@@ -401,7 +461,14 @@ displayResults = function(data) {
 
 // Setup panel selector with API data
 function setupPanelSelector(solarPotential) {
-    maxPanels = solarPotential.maxArrayPanelsCount || 0;
+    // Use actual panels array length, not maxArrayPanelsCount
+    const actualPanels = solarPotential.solarPanels || [];
+    maxPanels = actualPanels.length;
+    
+    console.log('Setting up panel selector:', {
+        actualPanelsCount: maxPanels,
+        maxArrayPanelsCount: solarPotential.maxArrayPanelsCount
+    });
     
     const slider = document.getElementById('panelCountSlider');
     const maxCountEl = document.getElementById('maxPanelCount');
@@ -414,8 +481,17 @@ function setupPanelSelector(solarPotential) {
         if (maxCountEl) maxCountEl.textContent = maxPanels;
         if (maxLabelEl) maxLabelEl.textContent = maxPanels;
         
+        // Update slider visual style
+        updatePanelDisplay(slider.value);
+        
         // Trigger initial update
         handlePanelCountChange({ target: slider });
+    } else if (slider) {
+        // No panels available
+        slider.max = 0;
+        slider.value = 0;
+        if (maxCountEl) maxCountEl.textContent = '0';
+        if (maxLabelEl) maxLabelEl.textContent = '0';
     }
 }
 
