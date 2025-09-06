@@ -692,40 +692,10 @@ function drawSatelliteRoof() {
     }
 }
 
-// Draw basic roof representation
+// Draw basic roof representation (LEGACY - redirects to enhanced fallback)
 function drawBasicRoof() {
-    if (!roofContext) return;
-
-    const width = roofCanvas.width;
-    const height = roofCanvas.height;
-    const padding = 40;
-
-    // Clear canvas with light background
-    roofContext.fillStyle = '#f8fafc';
-    roofContext.fillRect(0, 0, width, height);
-
-    // Draw roof outline (simple rectangle for now)
-    const roofWidth = width - padding * 2;
-    const roofHeight = height - padding * 2;
-    const roofX = padding;
-    const roofY = padding;
-
-    // Roof background
-    roofContext.fillStyle = '#e2e8f0';
-    roofContext.fillRect(roofX, roofY, roofWidth, roofHeight);
-
-    // Roof border
-    roofContext.strokeStyle = '#64748b';
-    roofContext.lineWidth = 2;
-    roofContext.strokeRect(roofX, roofY, roofWidth, roofHeight);
-
-    // Add roof ridge line for depth
-    roofContext.strokeStyle = '#475569';
-    roofContext.lineWidth = 1;
-    roofContext.beginPath();
-    roofContext.moveTo(roofX + roofWidth * 0.5, roofY);
-    roofContext.lineTo(roofX + roofWidth * 0.5, roofY + roofHeight);
-    roofContext.stroke();
+    console.log('drawBasicRoof called - redirecting to enhanced fallback');
+    drawEnhancedFallbackRoof();
 }
 
 // Enhanced fallback roof visualization when no satellite imagery is available
@@ -833,13 +803,13 @@ function drawEnhancedFallbackRoof() {
 
 // Update roof visualization with selected panels
 async function updateRoofVisualization(selectedPanels) {
-    if (!roofContext || maxPanels === 0) return;
+    if (!roofContexts.base || maxPanels === 0) return;
     
     // Redraw roof background (satellite or basic)
     if (satelliteImage) {
         drawSatelliteRoof();
     } else {
-        drawBasicRoof();
+        drawEnhancedFallbackRoof();
     }
     
     if (selectedPanels > 0) {
@@ -847,83 +817,10 @@ async function updateRoofVisualization(selectedPanels) {
     }
 }
 
-// Draw solar panels on the roof
+// Draw solar panels on the roof (LEGACY - redirects to new system)
 function drawSolarPanels(panelCount) {
-    if (!roofContext) return;
-    
-    const width = roofCanvas.width;
-    const height = roofCanvas.height;
-    const padding = 40;
-    const roofWidth = width - padding * 2;
-    const roofHeight = height - padding * 2;
-    const roofX = padding;
-    const roofY = padding;
-    
-    // Calculate panel dimensions and layout
-    const panelsPerRow = Math.ceil(Math.sqrt(maxPanels * (roofWidth / roofHeight)));
-    const rows = Math.ceil(maxPanels / panelsPerRow);
-    
-    const panelWidth = (roofWidth - 20) / panelsPerRow; // 20px for spacing
-    const panelHeight = (roofHeight - 20) / rows;
-    
-    const startX = roofX + 10;
-    const startY = roofY + 10;
-    
-    // Draw panels
-    roofContext.fillStyle = '#3b82f6';
-    roofContext.strokeStyle = '#1e40af';
-    roofContext.lineWidth = 1;
-    
-    let panelsDrawn = 0;
-    
-    for (let row = 0; row < rows && panelsDrawn < panelCount; row++) {
-        for (let col = 0; col < panelsPerRow && panelsDrawn < panelCount; col++) {
-            const x = startX + col * panelWidth;
-            const y = startY + row * panelHeight;
-            
-            // Panel rectangle
-            roofContext.fillRect(x, y, panelWidth - 2, panelHeight - 2);
-            roofContext.strokeRect(x, y, panelWidth - 2, panelHeight - 2);
-            
-            // Panel grid lines for detail
-            roofContext.strokeStyle = '#60a5fa';
-            roofContext.lineWidth = 0.5;
-            
-            // Vertical lines
-            const verticalLines = 3;
-            for (let i = 1; i < verticalLines; i++) {
-                const lineX = x + (i * (panelWidth - 2)) / verticalLines;
-                roofContext.beginPath();
-                roofContext.moveTo(lineX, y);
-                roofContext.lineTo(lineX, y + panelHeight - 2);
-                roofContext.stroke();
-            }
-            
-            // Horizontal lines
-            const horizontalLines = 4;
-            for (let i = 1; i < horizontalLines; i++) {
-                const lineY = y + (i * (panelHeight - 2)) / horizontalLines;
-                roofContext.beginPath();
-                roofContext.moveTo(x, lineY);
-                roofContext.lineTo(x + panelWidth - 2, lineY);
-                roofContext.stroke();
-            }
-            
-            roofContext.strokeStyle = '#1e40af';
-            roofContext.lineWidth = 1;
-            panelsDrawn++;
-        }
-    }
-    
-    // Add panel count text
-    roofContext.fillStyle = '#1f2937';
-    roofContext.font = '14px sans-serif';
-    roofContext.textAlign = 'center';
-    roofContext.fillText(
-        `${panelCount} Solar Panels`, 
-        width / 2, 
-        height - 10
-    );
+    console.log('drawSolarPanels called - redirecting to new system');
+    drawBasicPanelsOnLayer(panelCount);
 }
 
 // Draw solar panels using actual roof segment data
@@ -1134,130 +1031,6 @@ function drawBasicPanelsOnLayer(selectedPanels) {
     ctx.fillText(`${selectedPanels} Solar Panels`, 15, height - 18);
 }
 
-// Legacy function (keep for backwards compatibility but redirect to layers)
-function drawPanelsFromConfigs(selectedPanels, panelConfigs) {
-    
-    const width = roofCanvas.width;
-    const height = roofCanvas.height;
-    
-    let totalPanelsToPlace = selectedPanels;
-    let panelsPlaced = 0;
-    
-    // Sort configurations by panel count (largest first for better placement)
-    const sortedConfigs = [...panelConfigs].sort((a, b) => b.panelsCount - a.panelsCount);
-    
-    for (const config of sortedConfigs) {
-        if (panelsPlaced >= selectedPanels) break;
-        
-        const panelsInThisConfig = Math.min(config.panelsCount, totalPanelsToPlace - panelsPlaced);
-        
-        if (panelsInThisConfig > 0) {
-            // Draw panels for this configuration
-            drawPanelsForConfig(config, panelsInThisConfig);
-            panelsPlaced += panelsInThisConfig;
-        }
-    }
-    
-    // Add panel count text overlay
-    roofContext.fillStyle = 'rgba(255, 255, 255, 0.9)';
-    roofContext.fillRect(10, height - 40, 120, 30);
-    roofContext.fillStyle = '#1f2937';
-    roofContext.font = 'bold 14px sans-serif';
-    roofContext.textAlign = 'left';
-    roofContext.fillText(`${selectedPanels} Solar Panels`, 15, height - 20);
-}
-
-// Draw panels for a specific configuration
-function drawPanelsForConfig(config, panelCount) {
-    if (!roofContext || !config.roofSegmentSummaries) return;
-    
-    const width = roofCanvas.width;
-    const height = roofCanvas.height;
-    
-    // Distribute panels across roof segments in this configuration
-    let panelsRemaining = panelCount;
-    
-    for (const segment of config.roofSegmentSummaries) {
-        if (panelsRemaining <= 0) break;
-        
-        const segmentPanels = Math.min(segment.panelsCount, panelsRemaining);
-        
-        if (segmentPanels > 0) {
-            drawPanelsForSegment(segment, segmentPanels, width, height);
-            panelsRemaining -= segmentPanels;
-        }
-    }
-}
-
-// Draw panels for a specific roof segment
-function drawPanelsForSegment(segment, panelCount, canvasWidth, canvasHeight) {
-    if (!roofContext) return;
-    
-    // Use a better distribution approach that doesn't create grid conflicts
-    const padding = 20;
-    const availableWidth = canvasWidth - (padding * 2);
-    const availableHeight = canvasHeight - (padding * 2);
-    
-    // Calculate optimal panel layout
-    const cols = Math.min(Math.ceil(Math.sqrt(panelCount * (availableWidth / availableHeight))), 8);
-    const rows = Math.ceil(panelCount / cols);
-    
-    // Calculate panel dimensions with proper spacing
-    const spacing = 2;
-    const panelWidth = Math.max((availableWidth - (cols - 1) * spacing) / cols, 20);
-    const panelHeight = Math.max((availableHeight - (rows - 1) * spacing) / rows, 15);
-    
-    // Center the panel array
-    const totalWidth = cols * panelWidth + (cols - 1) * spacing;
-    const totalHeight = rows * panelHeight + (rows - 1) * spacing;
-    const startX = padding + (availableWidth - totalWidth) / 2;
-    const startY = padding + (availableHeight - totalHeight) / 2;
-    
-    // Set panel color based on efficiency (azimuth/pitch affect efficiency)
-    const efficiency = calculatePanelEfficiency(segment.azimuthDegrees, segment.pitchDegrees);
-    roofContext.fillStyle = getPanelColor(efficiency);
-    roofContext.strokeStyle = '#1e40af';
-    roofContext.lineWidth = 1;
-    
-    let panelsDrawn = 0;
-    
-    for (let row = 0; row < rows && panelsDrawn < panelCount; row++) {
-        for (let col = 0; col < cols && panelsDrawn < panelCount; col++) {
-            const x = startX + col * (panelWidth + spacing);
-            const y = startY + row * (panelHeight + spacing);
-            
-            // Draw panel
-            roofContext.fillRect(x, y, panelWidth, panelHeight);
-            roofContext.strokeRect(x, y, panelWidth, panelHeight);
-            
-            // Add solar cell grid pattern
-            roofContext.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-            roofContext.lineWidth = 0.5;
-            
-            // Draw grid lines
-            const gridLines = 4;
-            for (let i = 1; i < gridLines; i++) {
-                // Vertical lines
-                const lineX = x + (i * panelWidth) / gridLines;
-                roofContext.beginPath();
-                roofContext.moveTo(lineX, y);
-                roofContext.lineTo(lineX, y + panelHeight);
-                roofContext.stroke();
-                
-                // Horizontal lines
-                const lineY = y + (i * panelHeight) / gridLines;
-                roofContext.beginPath();
-                roofContext.moveTo(x, lineY);
-                roofContext.lineTo(x + panelWidth, lineY);
-                roofContext.stroke();
-            }
-            
-            roofContext.strokeStyle = '#1e40af';
-            roofContext.lineWidth = 1;
-            panelsDrawn++;
-        }
-    }
-}
 
 // Calculate panel efficiency based on roof orientation
 function calculatePanelEfficiency(azimuth, pitch) {

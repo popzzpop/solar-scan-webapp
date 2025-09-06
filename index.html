@@ -78,11 +78,11 @@
                         </div>
 
                         <div class="bg-gray-50 rounded-lg p-4 text-center">
-                            <div class="relative inline-block border border-gray-200 rounded bg-white">
-                                <canvas id="roofCanvasBase" width="400" height="300" class="absolute top-0 left-0"></canvas>
-                                <canvas id="roofCanvasMask" width="400" height="300" class="absolute top-0 left-0"></canvas>
-                                <canvas id="roofCanvasFlux" width="400" height="300" class="absolute top-0 left-0"></canvas>
-                                <canvas id="roofCanvasPanels" width="400" height="300" class="absolute top-0 left-0"></canvas>
+                            <div class="relative inline-block border border-gray-200 rounded bg-white" style="width: 400px; height: 300px;">
+                                <canvas id="roofCanvasBase" width="400" height="300" class="absolute top-0 left-0" style="z-index: 1;"></canvas>
+                                <canvas id="roofCanvasMask" width="400" height="300" class="absolute top-0 left-0" style="z-index: 2;"></canvas>
+                                <canvas id="roofCanvasFlux" width="400" height="300" class="absolute top-0 left-0" style="z-index: 3;"></canvas>
+                                <canvas id="roofCanvasPanels" width="400" height="300" class="absolute top-0 left-0" style="z-index: 4;"></canvas>
                             </div>
                             <p class="text-sm text-gray-600 mt-2">Interactive solar panel placement</p>
                         </div>
