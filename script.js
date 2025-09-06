@@ -160,9 +160,10 @@ function clearPreviousAnalysisState() {
     fluxImage = null;
     showFluxOverlay = false;
     
-    // Clear building bounds
+    // Clear building bounds and background state
     window.buildingBounds = null;
     window.canvasDimensions = null;
+    window.backgroundDrawn = false;
     
     // Clear all canvas layers
     if (roofContexts) {
@@ -397,19 +398,8 @@ function handleFluxToggle(event) {
     showFluxOverlay = event.target.checked;
     console.log('Flux overlay toggled:', showFluxOverlay);
     
-    // Redraw the roof with or without flux overlay
-    const slider = document.getElementById('panelCountSlider');
-    if (slider) {
-        const selectedPanels = parseInt(slider.value);
-        updateRoofVisualization(selectedPanels);
-    } else {
-        // Just redraw the roof background
-        if (satelliteImage) {
-            drawSatelliteRoof();
-        } else {
-            drawBasicRoof();
-        }
-    }
+    // Just update the flux overlay without redrawing everything
+    updateFluxOverlay();
 }
 
 // Update panel count display
@@ -622,9 +612,16 @@ function calculatePanelBounds(panels) {
         if (lng > maxLng) maxLng = lng;
     }
     
-    // Add some padding
-    const latPadding = (maxLat - minLat) * 0.2;
-    const lngPadding = (maxLng - minLng) * 0.2;
+    // Add generous padding to prevent overlapping
+    const latDiff = maxLat - minLat;
+    const lngDiff = maxLng - minLng;
+    
+    // Use minimum padding to ensure good visualization
+    const minLatPadding = Math.max(latDiff * 0.5, 0.0001); // At least 50% padding or 0.0001 degrees
+    const minLngPadding = Math.max(lngDiff * 0.5, 0.0001);
+    
+    const latPadding = minLatPadding;
+    const lngPadding = minLngPadding;
     
     return {
         minLat: minLat - latPadding,
@@ -858,27 +855,44 @@ function drawEnhancedFallbackRoof() {
     ctx.fillText('(Interactive panels will appear here)', width / 2, height - 2);
 }
 
-// Update roof visualization with selected panels
+// Update roof visualization with selected panels (optimized - don't redraw background)
 async function updateRoofVisualization(selectedPanels) {
     if (!roofContexts.base || maxPanels === 0) return;
     
-    // Redraw roof background using simplified approach
-    await drawSimplifiedRoofVisualization();
+    // Only redraw background if it's the first time or specifically requested
+    if (!window.backgroundDrawn) {
+        await drawSimplifiedRoofVisualization();
+        window.backgroundDrawn = true;
+    }
     
-    // Draw flux overlay if enabled
-    if (showFluxOverlay && fluxImage && roofContexts.flux) {
-        const width = roofCanvases.flux.width;
-        const height = roofCanvases.flux.height;
-        roofContexts.flux.clearRect(0, 0, width, height);
-        roofContexts.flux.drawImage(fluxImage, 0, 0, width, height);
-    } else if (roofContexts.flux) {
-        const width = roofCanvases.flux.width;
-        const height = roofCanvases.flux.height;
-        roofContexts.flux.clearRect(0, 0, width, height);
+    // Update flux overlay if enabled
+    updateFluxOverlay();
+    
+    // Always clear and redraw panels layer
+    if (roofContexts.panels) {
+        const width = roofCanvases.panels.width;
+        const height = roofCanvases.panels.height;
+        roofContexts.panels.clearRect(0, 0, width, height);
     }
     
     if (selectedPanels > 0) {
         drawSolarPanelsOnRealRoof(selectedPanels);
+    }
+}
+
+// Separate function for flux overlay updates
+function updateFluxOverlay() {
+    if (!roofContexts.flux) return;
+    
+    const width = roofCanvases.flux.width;
+    const height = roofCanvases.flux.height;
+    roofContexts.flux.clearRect(0, 0, width, height);
+    
+    if (showFluxOverlay && fluxImage) {
+        console.log('Drawing flux overlay');
+        roofContexts.flux.globalAlpha = 0.7; // Make it semi-transparent so background shows through
+        roofContexts.flux.drawImage(fluxImage, 0, 0, width, height);
+        roofContexts.flux.globalAlpha = 1.0; // Reset alpha
     }
 }
 
@@ -992,9 +1006,12 @@ function calculatePanelSizeOnCanvas(bounds, canvasWidth, canvasHeight, panelWidt
     const panelWidthPixels = (panelWidthMeters / metersPerDegreeLng) * (canvasWidth / lngDiff);
     const panelHeightPixels = (panelHeightMeters / metersPerDegreeLat) * (canvasHeight / latDiff);
     
+    // Scale factor to make panels more visible on larger canvas
+    const scaleFactor = Math.min(canvasWidth / 400, canvasHeight / 300); // Scale relative to original 400x300
+    
     return {
-        width: Math.max(4, panelWidthPixels), // Minimum 4 pixels wide
-        height: Math.max(3, panelHeightPixels) // Minimum 3 pixels high
+        width: Math.max(8, Math.min(40, panelWidthPixels * scaleFactor)), // Min 8px, max 40px
+        height: Math.max(6, Math.min(30, panelHeightPixels * scaleFactor)) // Min 6px, max 30px
     };
 }
 
