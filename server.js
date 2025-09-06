@@ -3,6 +3,8 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { fromUrl, fromArrayBuffer } from 'geotiff';
+import sharp from 'sharp';
 
 dotenv.config();
 
@@ -131,16 +133,27 @@ app.get('/api/geocode', async (req, res) => {
 
 app.get('/api/solar/image-proxy', async (req, res) => {
   const { url, type } = req.query;
-  
+
   if (!url) {
     return res.status(400).json({ error: 'URL parameter required' });
   }
 
   try {
     console.log(`Fetching ${type} image from:`, url);
-    
-    const response = await fetch(url);
-    
+
+    // Add API key to GeoTIFF URLs if not already present
+    const apiKey = process.env.GOOGLE_SOLAR_API_KEY;
+    let finalUrl = url;
+
+    // Handle different types of Google Solar API URLs
+    if (url.includes('solar.googleapis.com') && !url.includes('key=')) {
+      const separator = url.includes('?') ? '&' : '?';
+      finalUrl = `${url}${separator}key=${apiKey}`;
+      console.log(`Added API key to Google Solar API URL`);
+    }
+
+    const response = await fetch(finalUrl);
+
     if (!response.ok) {
       throw new Error(`Failed to fetch image: ${response.status}`);
     }
@@ -149,17 +162,156 @@ app.get('/api/solar/image-proxy', async (req, res) => {
     const contentType = response.headers.get('content-type');
     console.log(`${type} image content type:`, contentType);
 
-    // Pass through the image data
     const arrayBuffer = await response.arrayBuffer();
     const imageBuffer = Buffer.from(arrayBuffer);
-    
-    // Set appropriate headers
-    res.set('Content-Type', contentType || 'image/png');
-    res.set('Content-Length', imageBuffer.length);
-    res.set('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
-    
-    res.send(imageBuffer);
-    
+
+    // Handle GeoTIFF files by converting them to PNG
+    if (contentType === 'image/tiff' || url.includes('.tif') || type === 'flux') {
+      console.log('Converting GeoTIFF to PNG...');
+      try {
+        const tiff = await fromArrayBuffer(imageBuffer);
+        const image = await tiff.getImage();
+        const width = image.getWidth();
+        const height = image.getHeight();
+        const samples = await image.readRasters();
+
+        console.log(`GeoTIFF dimensions: ${width}x${height}, samples: ${image.getSamplesPerPixel()}`);
+
+        let rgbaBuffer;
+        const samplesPerPixel = image.getSamplesPerPixel();
+
+        if (samplesPerPixel === 1) {
+          // Grayscale or single-band (flux data)
+          const data = samples[0];
+          rgbaBuffer = Buffer.alloc(width * height * 4);
+          
+          // Find min and max values for better scaling
+          let minVal = Math.min(...data);
+          let maxVal = Math.max(...data);
+          
+          // Handle edge cases
+          if (minVal === maxVal) {
+            maxVal = minVal + 1;
+          }
+
+          for (let i = 0; i < data.length; i++) {
+            const rawValue = data[i];
+            const pixelIndex = i * 4;
+
+            if (type === 'flux') {
+              // For solar flux data, create a sophisticated heatmap
+              const normalizedValue = (rawValue - minVal) / (maxVal - minVal);
+              const intensity = Math.pow(normalizedValue, 0.5); // Gamma correction for better visibility
+              
+              // Create blue->green->yellow->red heatmap
+              let r, g, b;
+              if (intensity < 0.25) {
+                // Blue to cyan
+                const t = intensity * 4;
+                r = 0;
+                g = Math.floor(t * 255);
+                b = 255;
+              } else if (intensity < 0.5) {
+                // Cyan to green
+                const t = (intensity - 0.25) * 4;
+                r = 0;
+                g = 255;
+                b = Math.floor((1 - t) * 255);
+              } else if (intensity < 0.75) {
+                // Green to yellow
+                const t = (intensity - 0.5) * 4;
+                r = Math.floor(t * 255);
+                g = 255;
+                b = 0;
+              } else {
+                // Yellow to red
+                const t = (intensity - 0.75) * 4;
+                r = 255;
+                g = Math.floor((1 - t) * 255);
+                b = 0;
+              }
+              
+              rgbaBuffer[pixelIndex] = r;
+              rgbaBuffer[pixelIndex + 1] = g;
+              rgbaBuffer[pixelIndex + 2] = b;
+              rgbaBuffer[pixelIndex + 3] = Math.floor(intensity * 200 + 55); // Variable transparency
+            } else if (type === 'mask') {
+              // For roof mask, create a clear boundary
+              const normalizedValue = (rawValue - minVal) / (maxVal - minVal);
+              const isRoof = normalizedValue > 0.5;
+              
+              if (isRoof) {
+                rgbaBuffer[pixelIndex] = 255;     // White for roof area
+                rgbaBuffer[pixelIndex + 1] = 255;
+                rgbaBuffer[pixelIndex + 2] = 255;
+                rgbaBuffer[pixelIndex + 3] = 180; // Semi-transparent white
+              } else {
+                rgbaBuffer[pixelIndex] = 0;       // Transparent for non-roof
+                rgbaBuffer[pixelIndex + 1] = 0;
+                rgbaBuffer[pixelIndex + 2] = 0;
+                rgbaBuffer[pixelIndex + 3] = 0;
+              }
+            } else {
+              // For other grayscale data
+              const normalizedValue = (rawValue - minVal) / (maxVal - minVal);
+              const value = Math.floor(normalizedValue * 255);
+              rgbaBuffer[pixelIndex] = value;
+              rgbaBuffer[pixelIndex + 1] = value;
+              rgbaBuffer[pixelIndex + 2] = value;
+              rgbaBuffer[pixelIndex + 3] = 255;
+            }
+          }
+        } else if (samplesPerPixel === 3) {
+          // RGB
+          rgbaBuffer = Buffer.alloc(width * height * 4);
+          for (let i = 0; i < width * height; i++) {
+            rgbaBuffer[i * 4] = samples[0][i];     // Red
+            rgbaBuffer[i * 4 + 1] = samples[1][i]; // Green
+            rgbaBuffer[i * 4 + 2] = samples[2][i]; // Blue
+            rgbaBuffer[i * 4 + 3] = 255;           // Alpha
+          }
+        } else {
+          throw new Error(`Unsupported samples per pixel: ${samplesPerPixel}`);
+        }
+
+        // Convert RGBA buffer to PNG using Sharp
+        const pngBuffer = await sharp(rgbaBuffer, {
+          raw: {
+            width: width,
+            height: height,
+            channels: 4
+          }
+        })
+        .png()
+        .toBuffer();
+
+        res.set('Content-Type', 'image/png');
+        res.set('Content-Length', pngBuffer.length);
+        res.set('Cache-Control', 'public, max-age=3600');
+        return res.send(pngBuffer);
+
+      } catch (tiffError) {
+        console.error('GeoTIFF processing error:', tiffError);
+        // Fallback: try to convert with Sharp anyway
+        try {
+          const pngBuffer = await sharp(imageBuffer).png().toBuffer();
+          res.set('Content-Type', 'image/png');
+          res.set('Content-Length', pngBuffer.length);
+          res.set('Cache-Control', 'public, max-age=3600');
+          return res.send(pngBuffer);
+        } catch (sharpError) {
+          console.error('Sharp conversion fallback failed:', sharpError);
+          throw new Error('Failed to convert GeoTIFF file');
+        }
+      }
+    } else {
+      // For non-GeoTIFF files, pass through as-is
+      res.set('Content-Type', contentType || 'image/png');
+      res.set('Content-Length', imageBuffer.length);
+      res.set('Cache-Control', 'public, max-age=3600');
+      return res.send(imageBuffer);
+    }
+
   } catch (error) {
     console.error(`Error proxying ${type} image:`, error);
     res.status(500).json({ error: `Failed to fetch ${type} image` });

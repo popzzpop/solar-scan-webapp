@@ -47,23 +47,28 @@
                         <canvas id="savingsChart" width="400" height="200"></canvas>
                     </div>
 
-                    <div id="panelConfigPanel" class="hidden bg-white rounded-lg shadow-md p-6">
-                        <h3 class="text-lg font-semibold mb-4">🔧 Configure Solar Panels</h3>
-                        
-                        <div class="mb-6">
+                    <div id="panelConfigPanel" class="hidden">
+                        <!-- Panel configuration moved into roof visualization -->
+                    </div>
+
+                    <div id="roofVisualizationPanel" class="hidden bg-white rounded-lg shadow-md p-6">
+                        <h3 class="text-lg font-semibold mb-4">🏠 Roof Visualization</h3>
+
+                        <!-- Solar Panels Slider -->
+                        <div class="mb-6 p-4 bg-gray-50 rounded-lg">
                             <div class="flex justify-between items-center mb-2">
-                                <label for="panelCountSlider" class="text-sm font-medium text-gray-700">Number of Panels</label>
+                                <label for="panelCountSlider" class="font-medium text-gray-700">Solar Panel Configuration</label>
                                 <span class="text-sm text-gray-500">
-                                    <span id="selectedPanelCount">0</span> / <span id="maxPanelCount">0</span>
+                                    <span id="selectedPanelCount">0</span> / <span id="maxPanelCount">0</span> panels
                                 </span>
                             </div>
-                            <input 
-                                type="range" 
-                                id="panelCountSlider" 
-                                min="0" 
-                                max="100" 
-                                value="0" 
-                                class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                            <input
+                                type="range"
+                                id="panelCountSlider"
+                                min="0"
+                                max="100"
+                                value="0"
+                                class="w-full h-3 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
                                 style="background: linear-gradient(to right, #3B82F6 0%, #3B82F6 0%, #E5E7EB 0%, #E5E7EB 100%);"
                             >
                             <div class="flex justify-between text-xs text-gray-500 mt-1">
@@ -72,8 +77,19 @@
                             </div>
                         </div>
 
-                        <div class="mb-4">
-                            <h4 class="font-medium mb-3">📊 Live Calculations</h4>
+                        <div class="bg-gray-50 rounded-lg p-4 text-center">
+                            <div class="relative inline-block border border-gray-200 rounded bg-white">
+                                <canvas id="roofCanvasBase" width="400" height="300" class="absolute top-0 left-0"></canvas>
+                                <canvas id="roofCanvasMask" width="400" height="300" class="absolute top-0 left-0"></canvas>
+                                <canvas id="roofCanvasFlux" width="400" height="300" class="absolute top-0 left-0"></canvas>
+                                <canvas id="roofCanvasPanels" width="400" height="300" class="absolute top-0 left-0"></canvas>
+                            </div>
+                            <p class="text-sm text-gray-600 mt-2">Interactive solar panel placement</p>
+                        </div>
+
+                        <!-- Live Calculations -->
+                        <div class="mt-4 p-4 bg-white rounded-lg border border-gray-200">
+                            <h4 class="font-medium mb-3 text-center">📊 Live Calculations</h4>
                             <div class="grid grid-cols-2 gap-3">
                                 <div class="bg-green-50 p-3 rounded">
                                     <p class="text-sm text-green-700">Annual Generation</p>
@@ -93,15 +109,7 @@
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <div id="roofVisualizationPanel" class="hidden bg-white rounded-lg shadow-md p-6">
-                        <h3 class="text-lg font-semibold mb-4">🏠 Roof Visualization</h3>
-                        <div class="bg-gray-50 rounded-lg p-4 text-center">
-                            <canvas id="roofCanvas" width="400" height="300" class="border border-gray-200 rounded bg-white mx-auto"></canvas>
-                            <p class="text-sm text-gray-600 mt-2">Interactive roof panel placement</p>
-                        </div>
-                        
                         <div class="mt-4">
                             <div class="flex justify-center mb-3">
                                 <label class="flex items-center space-x-2 cursor-pointer">
@@ -109,7 +117,7 @@
                                     <span class="text-sm text-gray-700">Show Solar Heat Map</span>
                                 </label>
                             </div>
-                            
+
                             <div class="flex justify-center space-x-4 text-xs">
                                 <div class="flex items-center space-x-2">
                                     <div class="w-3 h-3 bg-blue-500 rounded"></div>
@@ -117,11 +125,11 @@
                                 </div>
                                 <div class="flex items-center space-x-2">
                                     <div class="w-3 h-3 bg-gray-300 rounded border"></div>
-                                    <span>Roof Area</span>
+                                    <span>Satellite Imagery</span>
                                 </div>
                                 <div class="flex items-center space-x-2">
                                     <div class="w-3 h-3 bg-yellow-400 rounded"></div>
-                                    <span>Solar Exposure</span>
+                                    <span>Solar Heat Map</span>
                                 </div>
                             </div>
                         </div>
