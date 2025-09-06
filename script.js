@@ -1,6 +1,5 @@
 let map;
 let currentMarker;
-let savingsChart;
 let googleApiKey;
 
 document.addEventListener('DOMContentLoaded', async function() {
@@ -150,11 +149,9 @@ async function geocodeAddress(address) {
 async function analyzeSolarPotential(lat, lng) {
     const loadingIndicator = document.getElementById('loadingIndicator');
     const resultsPanel = document.getElementById('resultsPanel');
-    const savingsPanel = document.getElementById('savingsPanel');
     
     loadingIndicator.classList.remove('hidden');
     resultsPanel.classList.add('hidden');
-    savingsPanel.classList.add('hidden');
 
     try {
         const buildingData = await fetchBuildingInsights(lat, lng);
@@ -178,7 +175,6 @@ async function analyzeSolarPotential(lat, lng) {
         
         loadingIndicator.classList.add('hidden');
         resultsPanel.classList.remove('hidden');
-        savingsPanel.classList.remove('hidden');
 
     } catch (error) {
         console.error('Analysis error:', error);
@@ -255,76 +251,9 @@ function displayResults(data) {
                 <p class="text-sm text-orange-700">Imagery Quality</p>
             </div>
         </div>
-        
-        ${solar.financialAnalyses && solar.financialAnalyses.length > 0 ? `
-        <div class="mt-4 p-4 bg-gray-50 rounded">
-            <h4 class="font-medium mb-3">💰 Financial Analysis</h4>
-            <div class="space-y-2">
-                ${solar.financialAnalyses.map(analysis => `
-                    <div class="flex justify-between">
-                        <span class="text-sm">20-year savings:</span>
-                        <span class="font-medium text-green-600">$${Math.round(analysis.cashPurchaseSavings?.savings?.savingsLifetime?.units || 0)}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm">Payback period:</span>
-                        <span class="font-medium">${Math.round(analysis.cashPurchaseSavings?.paybackYears || 0)} years</span>
-                    </div>
-                `).join('')}
-            </div>
-        </div>
-        ` : ''}
     `;
-
-    createSavingsChart(solar);
 }
 
-function createSavingsChart(solarData) {
-    const ctx = document.getElementById('savingsChart');
-    
-    if (savingsChart) {
-        savingsChart.destroy();
-    }
-
-    const yearlyGeneration = (solarData.maxArrayAreaMeters2 || 0) * 150;
-    const yearlySavings = yearlyGeneration * 0.12; // Assume $0.12 per kWh
-    
-    const years = Array.from({length: 20}, (_, i) => i + 1);
-    const cumulativeSavings = years.map(year => yearlySavings * year);
-
-    savingsChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: years,
-            datasets: [{
-                label: 'Cumulative Savings ($)',
-                data: cumulativeSavings,
-                borderColor: 'rgb(59, 130, 246)',
-                backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                tension: 0.1,
-                fill: true
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                title: {
-                    display: true,
-                    text: 'Projected Solar Savings Over Time'
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        callback: function(value) {
-                            return '$' + value.toLocaleString();
-                        }
-                    }
-                }
-            }
-        }
-    });
-}
 
 // Global variables for panel configuration
 let currentSolarData = null;
@@ -442,13 +371,13 @@ function updateLiveCalculations(selectedPanels) {
     
     const maxGeneration = (currentSolarData.maxArrayAreaMeters2 || 0) * 150; // kWh per year per m²
     const panelGeneration = selectedPanels > 0 ? (maxGeneration * selectedPanels) / maxPanels : 0;
-    const yearlySavings = panelGeneration * 0.12; // $0.12 per kWh
     const co2Offset = panelGeneration * 0.4; // 0.4 kg CO2 per kWh
     const coverage = maxPanels > 0 ? (selectedPanels / maxPanels) * 100 : 0;
+    const panelArea = selectedPanels > 0 ? Math.round((currentSolarData.maxArrayAreaMeters2 || 0) * selectedPanels / maxPanels) : 0;
     
     // Update display elements
     document.getElementById('liveGeneration').textContent = Math.round(panelGeneration).toLocaleString() + ' kWh';
-    document.getElementById('liveSavings').textContent = '$' + Math.round(yearlySavings).toLocaleString();
+    document.getElementById('livePanelArea').textContent = panelArea + ' m²';
     document.getElementById('liveCO2').textContent = Math.round(co2Offset).toLocaleString() + ' kg';
     document.getElementById('liveCoverage').textContent = Math.round(coverage) + '%';
 }
